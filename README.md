@@ -147,12 +147,13 @@ registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama
 
 Set these repository secrets in GitHub:
 
+- `ALICLOUD_REGISTRY_USERNAME`
 - `ALICLOUD_REGISTRY_PASSWORD`
 
 ### Trigger methods
 
 - Push Git tag like `v1.0.0` to build and push:
-  - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama:v1.0.0-comfyui-07092025-ollama-latest`
+  - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama:v1.0.0-comfyui-11022026-ollama-latest`
 - Run manually in GitHub Actions (`workflow_dispatch`) with:
   - `image_version` (required)
   - `comfyui_version` (optional, default reads from `Dockerfile`)

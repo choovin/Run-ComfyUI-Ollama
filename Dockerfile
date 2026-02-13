@@ -1,5 +1,5 @@
 # Base image (ComfyUI runtime version is parameterized for reproducible tags/builds)
-ARG COMFYUI_VERSION=07092025
+ARG COMFYUI_VERSION=11022026
 FROM ls250824/comfyui-runtime:${COMFYUI_VERSION} AS base
 ARG COMFYUI_VERSION
 ARG OLLAMA_VERSION=latest
