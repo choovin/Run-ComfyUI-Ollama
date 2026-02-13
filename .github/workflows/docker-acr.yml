@@ -1,0 +1,107 @@
+name: Build and Push Docker Image to ACR
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      image_version:
+        description: "Docker image version tag (for example: 20260213 or v1.0.0)"
+        required: true
+      comfyui_version:
+        description: "ComfyUI runtime version used in Dockerfile (default: Dockerfile ARG COMFYUI_VERSION)"
+        required: false
+      ollama_version:
+        description: "Ollama version for build-arg OLLAMA_VERSION (default: Dockerfile ARG OLLAMA_VERSION)"
+        required: false
+      push_latest:
+        description: "Also push latest tag"
+        required: false
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: registry.cn-shenzhen.aliyuncs.com
+  REPOSITORY: sailfish/runnode-run-comfyui-ollama
+  IMAGE: registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve image version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            VERSION="${{ github.event.inputs.image_version }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="$(date +%Y%m%d)-${GITHUB_SHA::7}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Image version: ${VERSION}"
+
+      - name: Resolve component versions for image tag
+        id: component_versions
+        shell: bash
+        run: |
+          DOCKERFILE_COMFYUI_VERSION="$(sed -n 's/^ARG COMFYUI_VERSION=\(.*\)$/\1/p' Dockerfile | head -n 1)"
+          DOCKERFILE_OLLAMA_VERSION="$(sed -n 's/^ARG OLLAMA_VERSION=\(.*\)$/\1/p' Dockerfile | head -n 1)"
+
+          COMFYUI_VERSION_INPUT="${{ github.event.inputs.comfyui_version }}"
+          OLLAMA_VERSION_INPUT="${{ github.event.inputs.ollama_version }}"
+
+          COMFYUI_VERSION="${COMFYUI_VERSION_INPUT:-$DOCKERFILE_COMFYUI_VERSION}"
+          OLLAMA_VERSION="${OLLAMA_VERSION_INPUT:-$DOCKERFILE_OLLAMA_VERSION}"
+
+          COMFYUI_TAG_SAFE="${COMFYUI_VERSION//[^a-zA-Z0-9._-]/-}"
+          OLLAMA_TAG_SAFE="${OLLAMA_VERSION//[^a-zA-Z0-9._-]/-}"
+          FULL_TAG="${{ steps.version.outputs.version }}-comfyui-${COMFYUI_TAG_SAFE}-ollama-${OLLAMA_TAG_SAFE}"
+
+          echo "comfyui_version=${COMFYUI_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "ollama_version=${OLLAMA_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "full_tag=${FULL_TAG}" >> "$GITHUB_OUTPUT"
+
+          echo "ComfyUI version: ${COMFYUI_VERSION}"
+          echo "Ollama version: ${OLLAMA_VERSION}"
+          echo "Full image tag: ${FULL_TAG}"
+
+      - name: Log in to Alibaba Cloud ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.ALICLOUD_REGISTRY_USERNAME }}
+          password: ${{ secrets.ALICLOUD_REGISTRY_PASSWORD }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          build-args: |
+            COMFYUI_VERSION=${{ steps.component_versions.outputs.comfyui_version }}
+            OLLAMA_VERSION=${{ steps.component_versions.outputs.ollama_version }}
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.component_versions.outputs.full_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Tag and push latest
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.push_latest == 'true'
+        shell: bash
+        run: |
+          docker buildx imagetools create \
+            --tag "${IMAGE}:latest" \
+            "${IMAGE}:${{ steps.component_versions.outputs.full_tag }}"

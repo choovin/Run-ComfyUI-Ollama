@@ -1,5 +1,8 @@
-# Base image
-FROM ls250824/comfyui-runtime:07092025 AS base
+# Base image (ComfyUI runtime version is parameterized for reproducible tags/builds)
+ARG COMFYUI_VERSION=07092025
+FROM ls250824/comfyui-runtime:${COMFYUI_VERSION} AS base
+ARG COMFYUI_VERSION
+ARG OLLAMA_VERSION=latest
 
 # Set working directory
 WORKDIR /
@@ -30,8 +33,12 @@ RUN wget https://github.com/jalberty2018/run-pytorch-cuda-develop/releases/downl
     echo "/opt/conda/lib/python3.11/site-packages/nvidia/cublas/lib" > /etc/ld.so.conf.d/cublas.conf && \
     ldconfig
 
-# Install Ollama
-RUN curl -fsSL https://ollama.com/install.sh | sh
+# Install Ollama (latest by default, or set OLLAMA_VERSION as build-arg)
+RUN if [ "${OLLAMA_VERSION}" = "latest" ]; then \
+      curl -fsSL https://ollama.com/install.sh | sh; \
+    else \
+      curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION="${OLLAMA_VERSION}" sh; \
+    fi
 
 # Install required Python packages and clone custom ComfyUI nodes
 RUN cd /ComfyUI/custom_nodes && \

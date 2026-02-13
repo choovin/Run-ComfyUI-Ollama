@@ -41,7 +41,7 @@ See below for options.
 ### Custom Build: 
 
 ```bash
-docker pull ls250824/run-comfyui-ollama:<version>
+docker pull registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama:<version>
 ```
 
 ## Environment Variables  
@@ -135,6 +135,37 @@ Interface available on exposed http port 7860
 This is not possible on [runpod.io](https://runpod.io?ref=se4tkc5o) use local hardware.
 You can build and push the image to Docker Hub using the `build-docker.py` script.
 
+## GitHub Actions: Build and Push to Alibaba Cloud ACR
+
+The workflow file is: `.github/workflows/docker-acr.yml`
+
+Image repository:
+
+```bash
+registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama
+```
+
+Set these repository secrets in GitHub:
+
+- `ALICLOUD_REGISTRY_USERNAME`
+- `ALICLOUD_REGISTRY_PASSWORD`
+
+### Trigger methods
+
+- Push Git tag like `v1.0.0` to build and push:
+  - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama:v1.0.0-comfyui-07092025-ollama-latest`
+- Run manually in GitHub Actions (`workflow_dispatch`) with:
+  - `image_version` (required)
+  - `comfyui_version` (optional, default reads from `Dockerfile`)
+  - `ollama_version` (optional, default reads from `Dockerfile`)
+- Optional: set `push_latest=true` in manual run to also push `:latest`.
+
+Tag format:
+
+```bash
+<image_version>-comfyui-<comfyui_version>-ollama-<ollama_version>
+```
+
 ### `build-docker.py` script options
 
 | Option         | Description                                         | Default                |
@@ -158,7 +189,5 @@ run-comfyui-ollama
 ```
 
 Note: If you want to push the image with the latest tag, add the --latest flag at the end.
-
-
 
 
