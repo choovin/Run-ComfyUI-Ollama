@@ -75,6 +75,18 @@ else
 fi
 	
 # Download Ollama models
+GLM5_UD_IQ2_XXS_MODEL="hf.co/unsloth/GLM-5-GGUF:UD-IQ2_XXS"
+case "${DEPLOY_GLM5_UD_IQ2_XXS:-}" in
+    1|true|TRUE|yes|YES)
+        if [[ -z "${OLLAMA_MODEL1:-}" ]]; then
+            OLLAMA_MODEL1="$GLM5_UD_IQ2_XXS_MODEL"
+            echo "[INFO] DEPLOY_GLM5_UD_IQ2_XXS enabled, defaulting OLLAMA_MODEL1 to: $OLLAMA_MODEL1"
+        else
+            echo "[INFO] DEPLOY_GLM5_UD_IQ2_XXS enabled, keeping user provided OLLAMA_MODEL1: $OLLAMA_MODEL1"
+        fi
+        ;;
+esac
+
 for i in 1 2 3 4 5 6; do
     var="OLLAMA_MODEL$i"
     model="${!var}"

@@ -64,6 +64,13 @@ docker pull registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollam
 | Model Type        | URL (Huggingface or Ollama) |
 |-------------------|-----------------------------|
 | Ollama model      | `OLLAMA_MODEL[1-6]`         |
+| GLM-5 preset      | `DEPLOY_GLM5_UD_IQ2_XXS`    |
+
+When `DEPLOY_GLM5_UD_IQ2_XXS=true` and `OLLAMA_MODEL1` is not set, startup automatically sets:
+
+```bash
+OLLAMA_MODEL1=hf.co/unsloth/GLM-5-GGUF:UD-IQ2_XXS
+```
 
 ## Connection options 
 
@@ -129,6 +136,23 @@ python gradio/chat.py
 ```
 
 Interface available on exposed http port 7860
+
+## Deploy GLM-5 UD-IQ2_XXS
+
+Set this environment variable in RunPod template:
+
+```bash
+DEPLOY_GLM5_UD_IQ2_XXS=true
+```
+
+Optional override:
+
+```bash
+OLLAMA_MODEL1=hf.co/unsloth/GLM-5-GGUF:UD-IQ2_XXS
+```
+
+Reference:
+- https://unsloth.ai/docs/models/glm-5
 
 ## Building the Docker Image 
 
