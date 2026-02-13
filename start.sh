@@ -73,6 +73,45 @@ if [[ "$HAS_GPU" -eq 1 ]]; then
 else
     echo "⚠️ WARNING: No GPU available, ComfyUI, Code Server, Ollama not started to limit memory use"
 fi
+
+# Start OpenCode server
+if command -v opencode >/dev/null 2>&1; then
+    OPENCODE_HOSTNAME="${OPENCODE_HOSTNAME:-0.0.0.0}"
+    OPENCODE_PORT="${OPENCODE_PORT:-4096}"
+    opencode serve --hostname "$OPENCODE_HOSTNAME" --port "$OPENCODE_PORT" &
+    until curl -s "http://127.0.0.1:${OPENCODE_PORT}" > /dev/null; do
+        echo "[INFO] Waiting for OpenCode server to start..."
+        sleep 3
+    done
+    echo "[INFO] OpenCode server is ready (http://127.0.0.1:${OPENCODE_PORT})."
+else
+    echo "⚠️ WARNING: OpenCode binary not found, skipping OpenCode server startup"
+fi
+
+# Start OpenCode Manager backend
+if command -v bun >/dev/null 2>&1 && [[ -d /opt/opencode-manager ]]; then
+    export HOST="${HOST:-0.0.0.0}"
+    export PORT="${PORT:-5003}"
+    export WORKSPACE_PATH="${WORKSPACE_PATH:-/workspace}"
+    export DATABASE_PATH="${DATABASE_PATH:-/workspace/opencode-manager/data/opencode.db}"
+    export AUTH_TRUSTED_ORIGINS="${AUTH_TRUSTED_ORIGINS:-http://127.0.0.1:${PORT},http://localhost:${PORT}}"
+    export AUTH_SECURE_COOKIES="${AUTH_SECURE_COOKIES:-false}"
+    if [[ -z "${AUTH_SECRET:-}" ]]; then
+        AUTH_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+        export AUTH_SECRET
+        echo "[INFO] AUTH_SECRET not set, generated an ephemeral secret for OpenCode Manager runtime."
+    fi
+    mkdir -p "$(dirname "$DATABASE_PATH")"
+    cd /opt/opencode-manager
+    bun backend/src/index.ts &
+    until curl -s "http://127.0.0.1:${PORT}" > /dev/null; do
+        echo "[INFO] Waiting for OpenCode Manager to start..."
+        sleep 3
+    done
+    echo "[INFO] OpenCode Manager is ready (http://127.0.0.1:${PORT})."
+else
+    echo "⚠️ WARNING: OpenCode Manager dependencies not found, skipping OpenCode Manager startup"
+fi
 	
 # Download Ollama models
 # Ollama currently cannot pull sharded GGUF tags (e.g. UD-IQ2_XXS).

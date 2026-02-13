@@ -84,6 +84,9 @@ Reason: `UD-IQ2_XXS` is a sharded GGUF tag on Hugging Face, and current Ollama c
 | **Code Server** | `9000` (HTTP) |
 | **SSH/SCP**     | `22`   (TCP)  |
 | **Gradio**      | `7860` (HTTP) |
+| **Ollama API**  | `11434` (HTTP)|
+| **OpenCode**    | `4096` (HTTP) |
+| **OpenCode Manager** | `5003` (HTTP) |
 
 ## Website models
 
@@ -164,6 +167,29 @@ OLLAMA_KEEP_ALIVE=30m
 
 Reference:
 - https://unsloth.ai/docs/models/glm-5
+
+## OpenCode and OpenCode Manager
+
+Both are preinstalled in the image and started by default at container startup.
+
+Environment variables for OpenCode:
+
+```bash
+OPENCODE_HOSTNAME=0.0.0.0
+OPENCODE_PORT=4096
+```
+
+Environment variables for OpenCode Manager:
+
+```bash
+OPENCODE_MANAGER_HOST=0.0.0.0
+OPENCODE_MANAGER_PORT=5003
+WORKSPACE_PATH=/workspace
+DATABASE_PATH=/workspace/opencode-manager/data/opencode.db
+AUTH_SECRET=<set-fixed-secret-in-production>
+AUTH_TRUSTED_ORIGINS=http://127.0.0.1:5003,http://localhost:5003
+AUTH_SECURE_COOKIES=false
+```
 
 ## Building the Docker Image 
 

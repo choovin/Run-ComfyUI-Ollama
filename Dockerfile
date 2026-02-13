@@ -3,6 +3,8 @@ ARG COMFYUI_VERSION=11022026
 FROM ls250824/comfyui-runtime:${COMFYUI_VERSION} AS base
 ARG COMFYUI_VERSION
 ARG OLLAMA_VERSION=0.16.1
+ARG OPENCODE_VERSION=latest
+ARG OPENCODE_MANAGER_REF=v0.8.29
 
 # Set working directory
 WORKDIR /
@@ -36,14 +38,34 @@ RUN wget https://github.com/jalberty2018/run-pytorch-cuda-develop/releases/downl
 # Install Ollama from GitHub releases (.tar.zst) to avoid install.sh fallback 404s
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends zstd; \
+    apt-get install -y --no-install-recommends zstd git ca-certificates curl jq lsof ripgrep gawk sed findutils coreutils procps python3 python3-pip python3-venv; \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
+    apt-get install -y --no-install-recommends nodejs; \
+    corepack enable; \
+    corepack prepare pnpm@10.28.1 --activate; \
+    curl -fsSL https://bun.sh/install | bash; \
+    ln -sf /root/.bun/bin/bun /usr/local/bin/bun; \
+    if [ "${OPENCODE_VERSION}" = "latest" ]; then \
+      curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path; \
+    else \
+      curl -fsSL https://opencode.ai/install | bash -s -- --version "${OPENCODE_VERSION}" --no-modify-path; \
+    fi; \
+    mv /root/.opencode /opt/opencode; \
+    chmod -R 755 /opt/opencode; \
+    ln -sf /opt/opencode/bin/opencode /usr/local/bin/opencode; \
     rm -rf /var/lib/apt/lists/*; \
     OLLAMA_TAG="v${OLLAMA_VERSION#v}"; \
     curl -fsSL "https://github.com/ollama/ollama/releases/download/${OLLAMA_TAG}/ollama-linux-amd64.tar.zst" -o /tmp/ollama-linux-amd64.tar.zst; \
     zstd -d < /tmp/ollama-linux-amd64.tar.zst | tar -xf - -C /usr/local \
       --exclude='lib/ollama/cuda_v13' \
       --exclude='lib/ollama/cuda_v13/*'; \
-    rm -f /tmp/ollama-linux-amd64.tar.zst
+    rm -f /tmp/ollama-linux-amd64.tar.zst; \
+    git clone --depth 1 --branch "${OPENCODE_MANAGER_REF}" https://github.com/chriswritescode-dev/opencode-manager.git /opt/opencode-manager; \
+    cd /opt/opencode-manager; \
+    pnpm install --frozen-lockfile; \
+    pnpm build; \
+    mkdir -p /opt/opencode-manager/backend/node_modules/@opencode-manager /workspace/opencode-manager/data; \
+    ln -sf /opt/opencode-manager/shared /opt/opencode-manager/backend/node_modules/@opencode-manager/shared
 
 # Install required Python packages and clone custom ComfyUI nodes
 RUN cd /ComfyUI/custom_nodes && \
@@ -69,8 +91,8 @@ RUN pip3 install --no-cache-dir diffusers gradio requests openai \
 # Set workspace directory
 WORKDIR /workspace
 
-# Expose ports for ComfyUI, code-server, Gradio
-EXPOSE 8188 9000 7860
+# Expose ports for ComfyUI, code-server, Gradio, Ollama, OpenCode, OpenCode Manager
+EXPOSE 8188 9000 7860 11434 4096 5003 5100 5101 5102 5103
 
 # Start script
 CMD [ "/start.sh" ]
