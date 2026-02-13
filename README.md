@@ -147,7 +147,6 @@ registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama
 
 Set these repository secrets in GitHub:
 
-- `ALICLOUD_REGISTRY_USERNAME`
 - `ALICLOUD_REGISTRY_PASSWORD`
 
 ### Trigger methods
@@ -189,5 +188,4 @@ run-comfyui-ollama
 ```
 
 Note: If you want to push the image with the latest tag, add the --latest flag at the end.
-
 

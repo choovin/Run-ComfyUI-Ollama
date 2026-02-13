@@ -81,7 +81,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.ALICLOUD_REGISTRY_USERNAME }}
+          username: haitukeiotserver
           password: ${{ secrets.ALICLOUD_REGISTRY_PASSWORD }}
 
       - name: Build and push image
