@@ -75,12 +75,14 @@ else
 fi
 	
 # Download Ollama models
-GLM5_UD_IQ2_XXS_MODEL="hf.co/unsloth/GLM-5-GGUF:UD-IQ2_XXS"
+# Ollama currently cannot pull sharded GGUF tags (e.g. UD-IQ2_XXS).
+# Use a single-file GGUF tag that Ollama can load.
+GLM5_OLLAMA_COMPAT_MODEL="hf.co/unsloth/GLM-5-GGUF:UD-TQ1_0"
 case "${DEPLOY_GLM5_UD_IQ2_XXS:-}" in
     1|true|TRUE|yes|YES)
         if [[ -z "${OLLAMA_MODEL1:-}" ]]; then
-            OLLAMA_MODEL1="$GLM5_UD_IQ2_XXS_MODEL"
-            echo "[INFO] DEPLOY_GLM5_UD_IQ2_XXS enabled, defaulting OLLAMA_MODEL1 to: $OLLAMA_MODEL1"
+            OLLAMA_MODEL1="$GLM5_OLLAMA_COMPAT_MODEL"
+            echo "[INFO] DEPLOY_GLM5_UD_IQ2_XXS enabled, defaulting OLLAMA_MODEL1 to Ollama-compatible tag: $OLLAMA_MODEL1"
         else
             echo "[INFO] DEPLOY_GLM5_UD_IQ2_XXS enabled, keeping user provided OLLAMA_MODEL1: $OLLAMA_MODEL1"
         fi

@@ -69,8 +69,10 @@ docker pull registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollam
 When `DEPLOY_GLM5_UD_IQ2_XXS=true` and `OLLAMA_MODEL1` is not set, startup automatically sets:
 
 ```bash
-OLLAMA_MODEL1=hf.co/unsloth/GLM-5-GGUF:UD-IQ2_XXS
+OLLAMA_MODEL1=hf.co/unsloth/GLM-5-GGUF:UD-TQ1_0
 ```
+
+Reason: `UD-IQ2_XXS` is a sharded GGUF tag on Hugging Face, and current Ollama cannot pull sharded GGUF yet.
 
 ## Connection options 
 
@@ -148,7 +150,16 @@ DEPLOY_GLM5_UD_IQ2_XXS=true
 Optional override:
 
 ```bash
-OLLAMA_MODEL1=hf.co/unsloth/GLM-5-GGUF:UD-IQ2_XXS
+OLLAMA_MODEL1=hf.co/unsloth/GLM-5-GGUF:UD-TQ1_0
+```
+
+Recommended Ollama tuning for GLM-5 UD-IQ2_XXS:
+
+```bash
+OLLAMA_NUM_PARALLEL=1
+OLLAMA_MAX_LOADED_MODELS=1
+OLLAMA_CONTEXT_LENGTH=8192
+OLLAMA_KEEP_ALIVE=30m
 ```
 
 Reference:
