@@ -40,7 +40,9 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*; \
     OLLAMA_TAG="v${OLLAMA_VERSION#v}"; \
     curl -fsSL "https://github.com/ollama/ollama/releases/download/${OLLAMA_TAG}/ollama-linux-amd64.tar.zst" -o /tmp/ollama-linux-amd64.tar.zst; \
-    zstd -d < /tmp/ollama-linux-amd64.tar.zst | tar -xf - -C /usr/local; \
+    zstd -d < /tmp/ollama-linux-amd64.tar.zst | tar -xf - -C /usr/local \
+      --exclude='lib/ollama/cuda_v13' \
+      --exclude='lib/ollama/cuda_v13/*'; \
     rm -f /tmp/ollama-linux-amd64.tar.zst
 
 # Install required Python packages and clone custom ComfyUI nodes
