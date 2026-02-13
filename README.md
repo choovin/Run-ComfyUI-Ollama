@@ -153,7 +153,7 @@ Set these repository secrets in GitHub:
 ### Trigger methods
 
 - Push Git tag like `v1.0.0` to build and push:
-  - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama:v1.0.0-comfyui-11022026-ollama-latest`
+  - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama:v1.0.0-comfyui-11022026-ollama-0.16.1`
 - Run manually in GitHub Actions (`workflow_dispatch`) with:
   - `image_version` (required)
   - `comfyui_version` (optional, default reads from `Dockerfile`)
@@ -189,4 +189,3 @@ run-comfyui-ollama
 ```
 
 Note: If you want to push the image with the latest tag, add the --latest flag at the end.
-

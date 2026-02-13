@@ -2,7 +2,7 @@
 ARG COMFYUI_VERSION=11022026
 FROM ls250824/comfyui-runtime:${COMFYUI_VERSION} AS base
 ARG COMFYUI_VERSION
-ARG OLLAMA_VERSION=latest
+ARG OLLAMA_VERSION=0.16.1
 
 # Set working directory
 WORKDIR /
@@ -33,12 +33,15 @@ RUN wget https://github.com/jalberty2018/run-pytorch-cuda-develop/releases/downl
     echo "/opt/conda/lib/python3.11/site-packages/nvidia/cublas/lib" > /etc/ld.so.conf.d/cublas.conf && \
     ldconfig
 
-# Install Ollama (latest by default, or set OLLAMA_VERSION as build-arg)
-RUN if [ "${OLLAMA_VERSION}" = "latest" ]; then \
-      curl -fsSL https://ollama.com/install.sh | sh; \
-    else \
-      curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION="${OLLAMA_VERSION}" sh; \
-    fi
+# Install Ollama from GitHub releases (.tar.zst) to avoid install.sh fallback 404s
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends zstd; \
+    rm -rf /var/lib/apt/lists/*; \
+    OLLAMA_TAG="v${OLLAMA_VERSION#v}"; \
+    curl -fsSL "https://github.com/ollama/ollama/releases/download/${OLLAMA_TAG}/ollama-linux-amd64.tar.zst" -o /tmp/ollama-linux-amd64.tar.zst; \
+    zstd -d < /tmp/ollama-linux-amd64.tar.zst | tar -xf - -C /usr/local; \
+    rm -f /tmp/ollama-linux-amd64.tar.zst
 
 # Install required Python packages and clone custom ComfyUI nodes
 RUN cd /ComfyUI/custom_nodes && \
