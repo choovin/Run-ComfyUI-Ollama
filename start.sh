@@ -117,6 +117,7 @@ fi
 # Ollama currently cannot pull sharded GGUF tags (e.g. UD-IQ2_XXS).
 # Use a single-file GGUF tag that Ollama can load.
 GLM5_OLLAMA_COMPAT_MODEL="hf.co/unsloth/GLM-5-GGUF:UD-TQ1_0"
+GLM47_FLASH_OLLAMA_MODEL="hf.co/unsloth/GLM-4.7-Flash-GGUF:Q4_K_M"
 case "${DEPLOY_GLM5_UD_IQ2_XXS:-}" in
     1|true|TRUE|yes|YES)
         if [[ -z "${OLLAMA_MODEL1:-}" ]]; then
@@ -124,6 +125,17 @@ case "${DEPLOY_GLM5_UD_IQ2_XXS:-}" in
             echo "[INFO] DEPLOY_GLM5_UD_IQ2_XXS enabled, defaulting OLLAMA_MODEL1 to Ollama-compatible tag: $OLLAMA_MODEL1"
         else
             echo "[INFO] DEPLOY_GLM5_UD_IQ2_XXS enabled, keeping user provided OLLAMA_MODEL1: $OLLAMA_MODEL1"
+        fi
+        ;;
+esac
+
+case "${DEPLOY_GLM47_FLASH_GGUF:-}" in
+    1|true|TRUE|yes|YES)
+        if [[ -z "${OLLAMA_MODEL2:-}" ]]; then
+            OLLAMA_MODEL2="$GLM47_FLASH_OLLAMA_MODEL"
+            echo "[INFO] DEPLOY_GLM47_FLASH_GGUF enabled, defaulting OLLAMA_MODEL2 to: $OLLAMA_MODEL2"
+        else
+            echo "[INFO] DEPLOY_GLM47_FLASH_GGUF enabled, keeping user provided OLLAMA_MODEL2: $OLLAMA_MODEL2"
         fi
         ;;
 esac
