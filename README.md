@@ -211,12 +211,12 @@ DEPLOY_GLM5_UD_IQ2_XXS=false
 DEPLOY_GLM47_FLASH_GGUF=true
 ```
 
-### 2) Prepare GLM-5 GGUF file for sidecar
+### 2) Reuse the existing model from Ollama volume
 
-Put the model file under:
+The sidecar reuses `ollama_data` and loads the already downloaded model blob:
 
 ```bash
-./models/glm5/GLM-5-UD-TQ1_0.gguf
+LLAMACPP_GLM5_MODEL_PATH=/root/.ollama/models/blobs/sha256-0c5372e168853083392239349e76fb8a09c60e86150d0d4ebe4b0a0ba5f0882a
 ```
 
 ### 3) Start main stack + sidecar profile
@@ -236,7 +236,7 @@ Main sidecar environment variables (see `.env.example`):
 ```bash
 LLAMACPP_PR=19460
 LLAMACPP_GLM5_PORT=18080
-LLAMACPP_GLM5_MODEL_FILE=GLM-5-UD-TQ1_0.gguf
+LLAMACPP_GLM5_MODEL_PATH=/root/.ollama/models/blobs/sha256-0c5372e168853083392239349e76fb8a09c60e86150d0d4ebe4b0a0ba5f0882a
 LLAMACPP_GLM5_ALIAS=glm5
 LLAMACPP_GLM5_CTX_SIZE=8192
 LLAMACPP_GLM5_N_GPU_LAYERS=999
