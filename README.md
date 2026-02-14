@@ -202,7 +202,13 @@ AUTH_SECURE_COOKIES=false
 ## Sidecar llama.cpp for GLM-5
 
 Current Ollama in this project cannot load GLM-5 GGUF (`glm-dsa` architecture).
-Use a sidecar `llama.cpp` server (latest `master`) for GLM-5, while ComfyUI keeps using Ollama for GLM-4.7.
+Use a sidecar `llama.cpp` server for GLM-5, while ComfyUI keeps using Ollama for GLM-4.7.
+
+By default, this project uses the official prebuilt image:
+
+```bash
+ghcr.io/ggml-org/llama.cpp:server-cuda
+```
 
 ### 1) Keep ComfyUI on GLM-4.7 (Ollama)
 
@@ -222,7 +228,7 @@ LLAMACPP_GLM5_MODEL_PATH=/root/.ollama/models/blobs/sha256-0c5372e16885308339223
 ### 3) Start main stack + sidecar profile
 
 ```bash
-docker compose --profile glm5-sidecar up -d --build
+docker compose --profile glm5-sidecar up -d
 ```
 
 Sidecar endpoint:
@@ -235,6 +241,7 @@ Main sidecar environment variables (see `.env.example`):
 
 ```bash
 LLAMACPP_REF=master
+LLAMACPP_SIDECAR_IMAGE=ghcr.io/ggml-org/llama.cpp:server-cuda
 LLAMACPP_GLM5_PORT=18080
 LLAMACPP_GLM5_MODEL_PATH=/root/.ollama/models/blobs/sha256-0c5372e168853083392239349e76fb8a09c60e86150d0d4ebe4b0a0ba5f0882a
 LLAMACPP_GLM5_ALIAS=glm5
@@ -242,6 +249,12 @@ LLAMACPP_GLM5_CTX_SIZE=8192
 LLAMACPP_GLM5_N_GPU_LAYERS=999
 LLAMACPP_GLM5_THREADS=16
 LLAMACPP_GLM5_PARALLEL=1
+```
+
+### 4) Fallback to local source build (if official image fails)
+
+```bash
+docker compose --profile glm5-sidecar-localbuild up -d --build
 ```
 
 ## Building the Docker Image 

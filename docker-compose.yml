@@ -64,13 +64,47 @@ services:
 
   llama-cpp-glm5:
     profiles: ["glm5-sidecar"]
+    image: ${LLAMACPP_SIDECAR_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}
+    container_name: llama-cpp-glm5
+    restart: unless-stopped
+    gpus: all
+    ports:
+      - "${LLAMACPP_GLM5_PORT:-18080}:8080"
+    volumes:
+      - ollama_data:/root/.ollama:ro
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --model
+      - ${LLAMACPP_GLM5_MODEL_PATH:-/root/.ollama/models/blobs/sha256-0c5372e168853083392239349e76fb8a09c60e86150d0d4ebe4b0a0ba5f0882a}
+      - --alias
+      - ${LLAMACPP_GLM5_ALIAS:-glm5}
+      - --ctx-size
+      - "${LLAMACPP_GLM5_CTX_SIZE:-8192}"
+      - --n-gpu-layers
+      - "${LLAMACPP_GLM5_N_GPU_LAYERS:-999}"
+      - --threads
+      - "${LLAMACPP_GLM5_THREADS:-16}"
+      - --parallel
+      - "${LLAMACPP_GLM5_PARALLEL:-1}"
+      - --jinja
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "curl -sf http://127.0.0.1:8080/health > /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  llama-cpp-glm5-localbuild:
+    profiles: ["glm5-sidecar-localbuild"]
     build:
       context: .
       dockerfile: sidecar/llamacpp-glm5/Dockerfile
       args:
         LLAMACPP_REF: ${LLAMACPP_REF:-master}
     image: runnode/llamacpp-glm5:master-latest
-    container_name: llama-cpp-glm5
+    container_name: llama-cpp-glm5-localbuild
     restart: unless-stopped
     gpus: all
     ports:
