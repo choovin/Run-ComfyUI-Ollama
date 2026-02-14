@@ -282,19 +282,25 @@ Set these repository secrets in GitHub:
 
 - Push Git tag like `v1.0.0` to build and push both images:
   - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama:v1.0.0-comfyui-11022026-ollama-0.16.1`
-  - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-llamacpp-glm5:v1.0.0-llamacpp-master`
+  - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-llamacpp-glm5:v1.0.0-llamacpp-official`
 - Run manually in GitHub Actions (`workflow_dispatch`) with:
   - `image_version` (required)
   - `comfyui_version` (optional, default reads from `Dockerfile`)
   - `ollama_version` (optional, default reads from `Dockerfile`)
-  - `llamacpp_ref` (optional, default reads from `sidecar/llamacpp-glm5/Dockerfile`)
+  - `sidecar_source_image` (optional, default `ghcr.io/ggml-org/llama.cpp:server-cuda`)
 - Optional: set `push_latest=true` in manual run to also push `:latest`.
+
+Workflow behavior:
+
+- Main image: source build in CI (unchanged)
+- GLM5 sidecar image: mirror official image to ACR (no CI source compile)
+- If you need local source build as fallback, use compose profile `glm5-sidecar-localbuild`
 
 Tag format:
 
 ```bash
 <image_version>-comfyui-<comfyui_version>-ollama-<ollama_version>
-<image_version>-llamacpp-<llamacpp_ref>
+<image_version>-llamacpp-official
 ```
 
 ### `build-docker.py` script options
