@@ -7,8 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       image_version:
-        description: "Docker image version tag (for example: 20260213 or v1.0.0)"
-        required: true
+        description: "Docker image version tag, or use auto (default)"
+        required: false
+        default: auto
       comfyui_version:
         description: "ComfyUI runtime version used in Dockerfile (default: Dockerfile ARG COMFYUI_VERSION)"
         required: false
@@ -18,6 +19,7 @@ on:
       sidecar_source_image:
         description: "Source image for GLM5 sidecar mirror (default: ghcr.io/ggml-org/llama.cpp:server-cuda)"
         required: false
+        default: ghcr.io/ggml-org/llama.cpp:server-cuda
       push_latest:
         description: "Also push latest tag"
         required: false
@@ -60,7 +62,12 @@ jobs:
         shell: bash
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            VERSION="${{ github.event.inputs.image_version }}"
+            IMAGE_VERSION_INPUT="${{ github.event.inputs.image_version }}"
+            if [[ -z "${IMAGE_VERSION_INPUT}" || "${IMAGE_VERSION_INPUT}" == "auto" ]]; then
+              VERSION="$(date +%Y%m%d)-${GITHUB_SHA::7}"
+            else
+              VERSION="${IMAGE_VERSION_INPUT}"
+            fi
           elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             VERSION="${GITHUB_REF_NAME}"
           else
@@ -136,7 +143,12 @@ jobs:
         shell: bash
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            VERSION="${{ github.event.inputs.image_version }}"
+            IMAGE_VERSION_INPUT="${{ github.event.inputs.image_version }}"
+            if [[ -z "${IMAGE_VERSION_INPUT}" || "${IMAGE_VERSION_INPUT}" == "auto" ]]; then
+              VERSION="$(date +%Y%m%d)-${GITHUB_SHA::7}"
+            else
+              VERSION="${IMAGE_VERSION_INPUT}"
+            fi
           elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             VERSION="${GITHUB_REF_NAME}"
           else

@@ -284,7 +284,7 @@ Set these repository secrets in GitHub:
   - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama:v1.0.0-comfyui-11022026-ollama-0.16.1`
   - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-llamacpp-glm5:v1.0.0-llamacpp-official`
 - Run manually in GitHub Actions (`workflow_dispatch`) with:
-  - `image_version` (required)
+  - `image_version` (optional, default `auto`, generates `YYYYMMDD-<short_sha>`)
   - `comfyui_version` (optional, default reads from `Dockerfile`)
   - `ollama_version` (optional, default reads from `Dockerfile`)
   - `sidecar_source_image` (optional, default `ghcr.io/ggml-org/llama.cpp:server-cuda`)
