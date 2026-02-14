@@ -74,19 +74,27 @@ else
     echo "⚠️ WARNING: No GPU available, ComfyUI, Code Server, Ollama not started to limit memory use"
 fi
 
-# Start OpenCode server
-if command -v opencode >/dev/null 2>&1; then
-    OPENCODE_HOSTNAME="${OPENCODE_HOSTNAME:-0.0.0.0}"
-    OPENCODE_PORT="${OPENCODE_PORT:-4096}"
-    opencode serve --hostname "$OPENCODE_HOSTNAME" --port "$OPENCODE_PORT" &
-    until curl -s "http://127.0.0.1:${OPENCODE_PORT}" > /dev/null; do
-        echo "[INFO] Waiting for OpenCode server to start..."
-        sleep 3
-    done
-    echo "[INFO] OpenCode server is ready (http://127.0.0.1:${OPENCODE_PORT})."
-else
-    echo "⚠️ WARNING: OpenCode binary not found, skipping OpenCode server startup"
-fi
+# Start OpenCode server (optional)
+OPENCODE_STANDALONE_ENABLED="${OPENCODE_STANDALONE_ENABLED:-true}"
+case "${OPENCODE_STANDALONE_ENABLED}" in
+    1|true|TRUE|yes|YES)
+        if command -v opencode >/dev/null 2>&1; then
+            OPENCODE_HOSTNAME="${OPENCODE_HOSTNAME:-0.0.0.0}"
+            OPENCODE_PORT="${OPENCODE_PORT:-4096}"
+            opencode serve --hostname "$OPENCODE_HOSTNAME" --port "$OPENCODE_PORT" &
+            until curl -s "http://127.0.0.1:${OPENCODE_PORT}" > /dev/null; do
+                echo "[INFO] Waiting for OpenCode server to start..."
+                sleep 3
+            done
+            echo "[INFO] OpenCode server is ready (http://127.0.0.1:${OPENCODE_PORT})."
+        else
+            echo "⚠️ WARNING: OpenCode binary not found, skipping OpenCode server startup"
+        fi
+        ;;
+    *)
+        echo "[INFO] OPENCODE_STANDALONE_ENABLED=false, skipping standalone OpenCode on port 4096."
+        ;;
+esac
 
 # Start OpenCode Manager backend
 if command -v bun >/dev/null 2>&1 && [[ -d /opt/opencode-manager ]]; then
