@@ -75,7 +75,7 @@ else
 fi
 
 # Start OpenCode server (optional)
-OPENCODE_STANDALONE_ENABLED="${OPENCODE_STANDALONE_ENABLED:-true}"
+OPENCODE_STANDALONE_ENABLED="${OPENCODE_STANDALONE_ENABLED:-false}"
 case "${OPENCODE_STANDALONE_ENABLED}" in
     1|true|TRUE|yes|YES)
         if command -v opencode >/dev/null 2>&1; then
@@ -98,8 +98,9 @@ esac
 
 # Start OpenCode Manager backend
 if command -v bun >/dev/null 2>&1 && [[ -d /opt/opencode-manager ]]; then
-    export HOST="${HOST:-0.0.0.0}"
-    export PORT="${PORT:-5003}"
+    export HOST="${OPENCODE_MANAGER_HOST:-${HOST:-0.0.0.0}}"
+    export PORT="${OPENCODE_MANAGER_PORT:-${PORT:-5003}}"
+    export NODE_ENV="${NODE_ENV:-production}"
     export WORKSPACE_PATH="${WORKSPACE_PATH:-/workspace}"
     export DATABASE_PATH="${DATABASE_PATH:-/workspace/opencode-manager/data/opencode.db}"
     export AUTH_TRUSTED_ORIGINS="${AUTH_TRUSTED_ORIGINS:-http://127.0.0.1:${PORT},http://localhost:${PORT}}"
@@ -111,12 +112,31 @@ if command -v bun >/dev/null 2>&1 && [[ -d /opt/opencode-manager ]]; then
     fi
     mkdir -p "$(dirname "$DATABASE_PATH")"
     cd /opt/opencode-manager
+    if [[ -d /opt/opencode-manager/frontend/dist ]]; then
+        echo "[INFO] OpenCode Manager frontend build found: /opt/opencode-manager/frontend/dist"
+    else
+        echo "⚠️ WARNING: OpenCode Manager frontend build not found, trying to build frontend..."
+        if command -v pnpm >/dev/null 2>&1; then
+            if pnpm --filter frontend build; then
+                echo "[INFO] OpenCode Manager frontend build completed."
+            else
+                echo "⚠️ WARNING: Frontend build failed, / may return API JSON only."
+            fi
+        else
+            echo "⚠️ WARNING: pnpm not found, cannot build frontend at runtime."
+        fi
+    fi
     bun backend/src/index.ts &
-    until curl -s "http://127.0.0.1:${PORT}" > /dev/null; do
-        echo "[INFO] Waiting for OpenCode Manager to start..."
+    until curl -fsS "http://127.0.0.1:${PORT}/api/health" > /dev/null; do
+        echo "[INFO] Waiting for OpenCode Manager API to start..."
         sleep 3
     done
-    echo "[INFO] OpenCode Manager is ready (http://127.0.0.1:${PORT})."
+    CONTENT_TYPE="$(curl -sI "http://127.0.0.1:${PORT}/" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-type"{print tolower($2)}' | head -n1)"
+    if [[ "$CONTENT_TYPE" == *"text/html"* ]]; then
+        echo "[INFO] OpenCode Manager full service is ready (UI+API on http://127.0.0.1:${PORT})."
+    else
+        echo "⚠️ WARNING: OpenCode Manager API is ready, but / is not HTML (content-type: ${CONTENT_TYPE:-unknown})."
+    fi
 else
     echo "⚠️ WARNING: OpenCode Manager dependencies not found, skipping OpenCode Manager startup"
 fi

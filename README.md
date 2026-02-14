@@ -178,11 +178,13 @@ Reference:
 
 ## OpenCode and OpenCode Manager
 
-Both are preinstalled in the image and started by default at container startup.
+Both are preinstalled in the image. By default, this project now starts OpenCode Manager only.
+Standalone OpenCode (`:4096`) is disabled unless explicitly enabled.
 
 Environment variables for OpenCode:
 
 ```bash
+OPENCODE_STANDALONE_ENABLED=false
 OPENCODE_HOSTNAME=0.0.0.0
 OPENCODE_PORT=4096
 ```
@@ -192,6 +194,7 @@ Environment variables for OpenCode Manager:
 ```bash
 OPENCODE_MANAGER_HOST=0.0.0.0
 OPENCODE_MANAGER_PORT=5003
+NODE_ENV=production
 WORKSPACE_PATH=/workspace
 DATABASE_PATH=/workspace/opencode-manager/data/opencode.db
 AUTH_SECRET=<set-fixed-secret-in-production>
