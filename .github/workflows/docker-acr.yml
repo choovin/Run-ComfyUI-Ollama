@@ -15,6 +15,9 @@ on:
       ollama_version:
         description: "Ollama version for build-arg OLLAMA_VERSION (default: Dockerfile ARG OLLAMA_VERSION)"
         required: false
+      llamacpp_pr:
+        description: "llama.cpp PR branch number for GLM5 sidecar build (default: 19460)"
+        required: false
       push_latest:
         description: "Also push latest tag"
         required: false
@@ -23,8 +26,10 @@ on:
 
 env:
   REGISTRY: registry.cn-shenzhen.aliyuncs.com
-  REPOSITORY: sailfish/runnode-run-comfyui-ollama
-  IMAGE: registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama
+  MAIN_REPOSITORY: sailfish/runnode-run-comfyui-ollama
+  MAIN_IMAGE: registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama
+  SIDECAR_REPOSITORY: sailfish/runnode-llamacpp-glm5
+  SIDECAR_IMAGE: registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-llamacpp-glm5
 
 jobs:
   docker:
@@ -88,6 +93,21 @@ jobs:
           echo "Ollama version: ${OLLAMA_VERSION}"
           echo "Full image tag: ${FULL_TAG}"
 
+      - name: Resolve sidecar version tag
+        id: sidecar_version
+        shell: bash
+        run: |
+          LLAMACPP_PR_INPUT="${{ github.event.inputs.llamacpp_pr }}"
+          LLAMACPP_PR="${LLAMACPP_PR_INPUT:-19460}"
+          LLAMACPP_PR_SAFE="${LLAMACPP_PR//[^a-zA-Z0-9._-]/-}"
+          SIDECAR_TAG="${{ steps.version.outputs.version }}-llamacpp-pr-${LLAMACPP_PR_SAFE}"
+
+          echo "llamacpp_pr=${LLAMACPP_PR}" >> "$GITHUB_OUTPUT"
+          echo "sidecar_tag=${SIDECAR_TAG}" >> "$GITHUB_OUTPUT"
+
+          echo "llama.cpp PR: ${LLAMACPP_PR}"
+          echo "Sidecar tag: ${SIDECAR_TAG}"
+
       - name: Log in to Alibaba Cloud ACR
         uses: docker/login-action@v3
         with:
@@ -95,7 +115,7 @@ jobs:
           username: ${{ secrets.ALICLOUD_REGISTRY_USERNAME }}
           password: ${{ secrets.ALICLOUD_REGISTRY_PASSWORD }}
 
-      - name: Build and push image
+      - name: Build and push main image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -105,7 +125,20 @@ jobs:
             COMFYUI_VERSION=${{ steps.component_versions.outputs.comfyui_version }}
             OLLAMA_VERSION=${{ steps.component_versions.outputs.ollama_version }}
           tags: |
-            ${{ env.IMAGE }}:${{ steps.component_versions.outputs.full_tag }}
+            ${{ env.MAIN_IMAGE }}:${{ steps.component_versions.outputs.full_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push llama.cpp GLM5 sidecar image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./sidecar/llamacpp-glm5/Dockerfile
+          push: true
+          build-args: |
+            LLAMACPP_PR=${{ steps.sidecar_version.outputs.llamacpp_pr }}
+          tags: |
+            ${{ env.SIDECAR_IMAGE }}:${{ steps.sidecar_version.outputs.sidecar_tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -114,5 +147,8 @@ jobs:
         shell: bash
         run: |
           docker buildx imagetools create \
-            --tag "${IMAGE}:latest" \
-            "${IMAGE}:${{ steps.component_versions.outputs.full_tag }}"
+            --tag "${MAIN_IMAGE}:latest" \
+            "${MAIN_IMAGE}:${{ steps.component_versions.outputs.full_tag }}"
+          docker buildx imagetools create \
+            --tag "${SIDECAR_IMAGE}:latest" \
+            "${SIDECAR_IMAGE}:${{ steps.sidecar_version.outputs.sidecar_tag }}"

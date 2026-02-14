@@ -199,6 +199,51 @@ AUTH_TRUSTED_ORIGINS=http://127.0.0.1:5003,http://localhost:5003
 AUTH_SECURE_COOKIES=false
 ```
 
+## Sidecar llama.cpp for GLM-5
+
+Current Ollama in this project cannot load GLM-5 GGUF (`glm-dsa` architecture).
+Use a sidecar `llama.cpp` server (PR `19460`) for GLM-5, while ComfyUI keeps using Ollama for GLM-4.7.
+
+### 1) Keep ComfyUI on GLM-4.7 (Ollama)
+
+```bash
+DEPLOY_GLM5_UD_IQ2_XXS=false
+DEPLOY_GLM47_FLASH_GGUF=true
+```
+
+### 2) Prepare GLM-5 GGUF file for sidecar
+
+Put the model file under:
+
+```bash
+./models/glm5/GLM-5-UD-TQ1_0.gguf
+```
+
+### 3) Start main stack + sidecar profile
+
+```bash
+docker compose --profile glm5-sidecar up -d --build
+```
+
+Sidecar endpoint:
+
+```bash
+http://127.0.0.1:18080
+```
+
+Main sidecar environment variables (see `.env.example`):
+
+```bash
+LLAMACPP_PR=19460
+LLAMACPP_GLM5_PORT=18080
+LLAMACPP_GLM5_MODEL_FILE=GLM-5-UD-TQ1_0.gguf
+LLAMACPP_GLM5_ALIAS=glm5
+LLAMACPP_GLM5_CTX_SIZE=8192
+LLAMACPP_GLM5_N_GPU_LAYERS=999
+LLAMACPP_GLM5_THREADS=16
+LLAMACPP_GLM5_PARALLEL=1
+```
+
 ## Building the Docker Image 
 
 This is not possible on [runpod.io](https://runpod.io?ref=se4tkc5o) use local hardware.
@@ -212,6 +257,7 @@ Image repository:
 
 ```bash
 registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama
+registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-llamacpp-glm5
 ```
 
 Set these repository secrets in GitHub:
@@ -221,18 +267,21 @@ Set these repository secrets in GitHub:
 
 ### Trigger methods
 
-- Push Git tag like `v1.0.0` to build and push:
+- Push Git tag like `v1.0.0` to build and push both images:
   - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama:v1.0.0-comfyui-11022026-ollama-0.16.1`
+  - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-llamacpp-glm5:v1.0.0-llamacpp-pr-19460`
 - Run manually in GitHub Actions (`workflow_dispatch`) with:
   - `image_version` (required)
   - `comfyui_version` (optional, default reads from `Dockerfile`)
   - `ollama_version` (optional, default reads from `Dockerfile`)
+  - `llamacpp_pr` (optional, default `19460`)
 - Optional: set `push_latest=true` in manual run to also push `:latest`.
 
 Tag format:
 
 ```bash
 <image_version>-comfyui-<comfyui_version>-ollama-<ollama_version>
+<image_version>-llamacpp-pr-<llamacpp_pr>
 ```
 
 ### `build-docker.py` script options
