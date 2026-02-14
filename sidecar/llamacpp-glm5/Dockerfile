@@ -1,6 +1,6 @@
 FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS build
 
-ARG LLAMACPP_PR=19460
+ARG LLAMACPP_REF=master
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -15,8 +15,8 @@ WORKDIR /src
 RUN git clone https://github.com/ggml-org/llama.cpp.git
 
 WORKDIR /src/llama.cpp
-RUN git fetch origin pull/${LLAMACPP_PR}/head:pr-${LLAMACPP_PR} && \
-    git checkout pr-${LLAMACPP_PR}
+RUN git fetch origin && \
+    git checkout "${LLAMACPP_REF}"
 
 RUN cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \

@@ -202,7 +202,7 @@ AUTH_SECURE_COOKIES=false
 ## Sidecar llama.cpp for GLM-5
 
 Current Ollama in this project cannot load GLM-5 GGUF (`glm-dsa` architecture).
-Use a sidecar `llama.cpp` server (PR `19460`) for GLM-5, while ComfyUI keeps using Ollama for GLM-4.7.
+Use a sidecar `llama.cpp` server (latest `master`) for GLM-5, while ComfyUI keeps using Ollama for GLM-4.7.
 
 ### 1) Keep ComfyUI on GLM-4.7 (Ollama)
 
@@ -234,7 +234,7 @@ http://127.0.0.1:18080
 Main sidecar environment variables (see `.env.example`):
 
 ```bash
-LLAMACPP_PR=19460
+LLAMACPP_REF=master
 LLAMACPP_GLM5_PORT=18080
 LLAMACPP_GLM5_MODEL_PATH=/root/.ollama/models/blobs/sha256-0c5372e168853083392239349e76fb8a09c60e86150d0d4ebe4b0a0ba5f0882a
 LLAMACPP_GLM5_ALIAS=glm5
@@ -269,19 +269,19 @@ Set these repository secrets in GitHub:
 
 - Push Git tag like `v1.0.0` to build and push both images:
   - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama:v1.0.0-comfyui-11022026-ollama-0.16.1`
-  - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-llamacpp-glm5:v1.0.0-llamacpp-pr-19460`
+  - `registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-llamacpp-glm5:v1.0.0-llamacpp-master`
 - Run manually in GitHub Actions (`workflow_dispatch`) with:
   - `image_version` (required)
   - `comfyui_version` (optional, default reads from `Dockerfile`)
   - `ollama_version` (optional, default reads from `Dockerfile`)
-  - `llamacpp_pr` (optional, default `19460`)
+  - `llamacpp_ref` (optional, default reads from `sidecar/llamacpp-glm5/Dockerfile`)
 - Optional: set `push_latest=true` in manual run to also push `:latest`.
 
 Tag format:
 
 ```bash
 <image_version>-comfyui-<comfyui_version>-ollama-<ollama_version>
-<image_version>-llamacpp-pr-<llamacpp_pr>
+<image_version>-llamacpp-<llamacpp_ref>
 ```
 
 ### `build-docker.py` script options

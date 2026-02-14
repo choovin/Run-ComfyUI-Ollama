@@ -68,8 +68,8 @@ services:
       context: .
       dockerfile: sidecar/llamacpp-glm5/Dockerfile
       args:
-        LLAMACPP_PR: ${LLAMACPP_PR:-19460}
-    image: runnode/llamacpp-glm5:pr19460
+        LLAMACPP_REF: ${LLAMACPP_REF:-master}
+    image: runnode/llamacpp-glm5:master-latest
     container_name: llama-cpp-glm5
     restart: unless-stopped
     gpus: all

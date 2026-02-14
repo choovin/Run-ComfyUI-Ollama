@@ -15,8 +15,8 @@ on:
       ollama_version:
         description: "Ollama version for build-arg OLLAMA_VERSION (default: Dockerfile ARG OLLAMA_VERSION)"
         required: false
-      llamacpp_pr:
-        description: "llama.cpp PR branch number for GLM5 sidecar build (default: 19460)"
+      llamacpp_ref:
+        description: "llama.cpp git ref (branch/tag/commit) for GLM5 sidecar build (default: Dockerfile ARG LLAMACPP_REF)"
         required: false
       push_latest:
         description: "Also push latest tag"
@@ -97,15 +97,16 @@ jobs:
         id: sidecar_version
         shell: bash
         run: |
-          LLAMACPP_PR_INPUT="${{ github.event.inputs.llamacpp_pr }}"
-          LLAMACPP_PR="${LLAMACPP_PR_INPUT:-19460}"
-          LLAMACPP_PR_SAFE="${LLAMACPP_PR//[^a-zA-Z0-9._-]/-}"
-          SIDECAR_TAG="${{ steps.version.outputs.version }}-llamacpp-pr-${LLAMACPP_PR_SAFE}"
+          DOCKERFILE_LLAMACPP_REF="$(sed -n 's/^ARG LLAMACPP_REF=\(.*\)$/\1/p' sidecar/llamacpp-glm5/Dockerfile | head -n 1)"
+          LLAMACPP_REF_INPUT="${{ github.event.inputs.llamacpp_ref }}"
+          LLAMACPP_REF="${LLAMACPP_REF_INPUT:-$DOCKERFILE_LLAMACPP_REF}"
+          LLAMACPP_REF_SAFE="${LLAMACPP_REF//[^a-zA-Z0-9._-]/-}"
+          SIDECAR_TAG="${{ steps.version.outputs.version }}-llamacpp-${LLAMACPP_REF_SAFE}"
 
-          echo "llamacpp_pr=${LLAMACPP_PR}" >> "$GITHUB_OUTPUT"
+          echo "llamacpp_ref=${LLAMACPP_REF}" >> "$GITHUB_OUTPUT"
           echo "sidecar_tag=${SIDECAR_TAG}" >> "$GITHUB_OUTPUT"
 
-          echo "llama.cpp PR: ${LLAMACPP_PR}"
+          echo "llama.cpp ref: ${LLAMACPP_REF}"
           echo "Sidecar tag: ${SIDECAR_TAG}"
 
       - name: Log in to Alibaba Cloud ACR
@@ -136,7 +137,7 @@ jobs:
           file: ./sidecar/llamacpp-glm5/Dockerfile
           push: true
           build-args: |
-            LLAMACPP_PR=${{ steps.sidecar_version.outputs.llamacpp_pr }}
+            LLAMACPP_REF=${{ steps.sidecar_version.outputs.llamacpp_ref }}
           tags: |
             ${{ env.SIDECAR_IMAGE }}:${{ steps.sidecar_version.outputs.sidecar_tag }}
           cache-from: type=gha
