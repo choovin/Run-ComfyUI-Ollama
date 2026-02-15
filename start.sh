@@ -55,44 +55,11 @@ mkdir -p "$(dirname "${DATABASE_PATH}")"
 cleanup() {
     local code=$?
     if [[ -n "${PID_MANAGER:-}" ]]; then kill "${PID_MANAGER}" 2>/dev/null || true; fi
-    if [[ -n "${PID_OPENCODE:-}" ]]; then kill "${PID_OPENCODE}" 2>/dev/null || true; fi
     if [[ -n "${PID_LLAMA:-}" ]]; then kill "${PID_LLAMA}" 2>/dev/null || true; fi
     wait || true
     exit "${code}"
 }
 trap cleanup EXIT INT TERM
-
-echo "[INFO] Prestarting OpenCode server on ${OPENCODE_HOST}:${OPENCODE_SERVER_PORT} (so manager won't hit 30s health timeout)"
-if ! command -v opencode >/dev/null 2>&1; then
-    echo "ERROR: opencode binary not found in PATH: ${PATH}" >&2
-    exit 1
-fi
-echo "[INFO] OpenCode version output:"
-opencode --version || true
-
-mkdir -p "${WORKSPACE_PATH}/.config/opencode" "${WORKSPACE_PATH}/.opencode/state"
-export XDG_DATA_HOME="${WORKSPACE_PATH}/.opencode/state"
-export XDG_CONFIG_HOME="${WORKSPACE_PATH}/.config"
-export OPENCODE_CONFIG="${WORKSPACE_PATH}/.config/opencode/opencode.json"
-
-OPENCODE_LOG="/tmp/opencode-serve.log"
-cd "${WORKSPACE_PATH}"
-opencode serve --port "${OPENCODE_SERVER_PORT}" --hostname "${OPENCODE_HOST}" >"${OPENCODE_LOG}" 2>&1 &
-PID_OPENCODE=$!
-
-# opencode may accept TCP before it can serve HTTP; don't block here on /doc.
-# Let opencode-manager perform the long health check with a larger timeout.
-deadline=$((SECONDS+30))
-until lsof -iTCP:"${OPENCODE_SERVER_PORT}" -sTCP:LISTEN >/dev/null 2>&1; do
-    if (( SECONDS > deadline )); then
-        echo "ERROR: opencode did not start listening within 30s on ${OPENCODE_HOST}:${OPENCODE_SERVER_PORT}" >&2
-        echo "Last 200 lines of ${OPENCODE_LOG}:" >&2
-        tail -n 200 "${OPENCODE_LOG}" >&2 || true
-        exit 1
-    fi
-    sleep 1
-done
-echo "[INFO] OpenCode server is listening on ${OPENCODE_HOST}:${OPENCODE_SERVER_PORT}"
 
 echo "[INFO] Starting OpenCode Manager on ${OPENCODE_MANAGER_HOST}:${OPENCODE_MANAGER_PORT}"
 cd /opt/opencode-manager
