@@ -12,10 +12,10 @@ RUN set -eux; \
       curl \
       git \
       jq \
+      nodejs \
+      npm \
       python3 \
       python3-pip; \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
-    apt-get install -y --no-install-recommends nodejs; \
     corepack enable; \
     corepack prepare pnpm@10.28.1 --activate; \
     curl -fsSL https://bun.sh/install | bash; \
