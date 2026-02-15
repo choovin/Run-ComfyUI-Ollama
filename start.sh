@@ -55,7 +55,9 @@ mkdir -p "$(dirname "${DATABASE_PATH}")"
 cleanup() {
     local code=$?
     if [[ -n "${PID_MANAGER:-}" ]]; then kill "${PID_MANAGER}" 2>/dev/null || true; fi
-    if [[ -n "${PID_LLAMA:-}" ]]; then kill "${PID_LLAMA}" 2>/dev/null || true; fi
+    if [[ -n "${PID_LLAMA:-}" ]]; then kill "${PID_LLAMA}" 2>/dev/null || true; fiserve.log），我就能判断：
+    
+    
     wait || true
     exit "${code}"
 }

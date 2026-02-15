@@ -1,6 +1,7 @@
 FROM ghcr.io/ggml-org/llama.cpp:server-cuda
 
-ARG OPENCODE_VERSION=latest
+# Default OpenCode version. Override via build-arg OPENCODE_VERSION=...
+ARG OPENCODE_VERSION=1.2.4
 ARG OPENCODE_MANAGER_REF=main
 ARG NODE_VERSION=22.14.0
 
