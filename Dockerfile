@@ -40,6 +40,16 @@ RUN set -eux; \
     ln -sf /opt/opencode/bin/opencode /usr/local/bin/opencode; \
     git clone --depth 1 --branch "${OPENCODE_MANAGER_REF}" https://github.com/chriswritescode-dev/opencode-manager.git /opt/opencode-manager; \
     cd /opt/opencode-manager; \
+    # Patch opencode-manager health check to tolerate slow opencode startup:
+    # - increase per-request timeout (was 3s)
+    # - use env HEALTH_CHECK_TIMEOUT_MS for overall wait (was hardcoded 30s)
+    # - sleep interval uses env HEALTH_CHECK_INTERVAL_MS
+    sed -i \
+      -e 's/AbortSignal\\.timeout(3000)/AbortSignal.timeout(10000)/g' \
+      -e 's/const healthy = await this\\.checkHealth()/const healthy = await this.waitForHealth(ENV.TIMEOUTS.HEALTH_CHECK_TIMEOUT_MS)/' \
+      -e 's/await this\\.waitForHealth(30000)/await this.waitForHealth(ENV.TIMEOUTS.HEALTH_CHECK_TIMEOUT_MS)/' \
+      -e 's/setTimeout\\(r, 500\\)/setTimeout(r, ENV.TIMEOUTS.HEALTH_CHECK_INTERVAL_MS)/' \
+      backend/src/services/opencode-single-server.ts; \
     pnpm install --frozen-lockfile; \
     pnpm build; \
     mkdir -p /opt/opencode-manager/backend/node_modules/@opencode-manager /workspace/opencode-manager/data; \

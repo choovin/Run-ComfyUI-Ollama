@@ -80,17 +80,19 @@ cd "${WORKSPACE_PATH}"
 opencode serve --port "${OPENCODE_SERVER_PORT}" --hostname "${OPENCODE_HOST}" >"${OPENCODE_LOG}" 2>&1 &
 PID_OPENCODE=$!
 
-deadline=$((SECONDS+180))
-until curl -fsS "http://${OPENCODE_HOST}:${OPENCODE_SERVER_PORT}/doc" >/dev/null 2>&1; do
+# opencode may accept TCP before it can serve HTTP; don't block here on /doc.
+# Let opencode-manager perform the long health check with a larger timeout.
+deadline=$((SECONDS+30))
+until lsof -iTCP:"${OPENCODE_SERVER_PORT}" -sTCP:LISTEN >/dev/null 2>&1; do
     if (( SECONDS > deadline )); then
-        echo "ERROR: opencode did not become healthy within 180s: http://${OPENCODE_HOST}:${OPENCODE_SERVER_PORT}/doc" >&2
+        echo "ERROR: opencode did not start listening within 30s on ${OPENCODE_HOST}:${OPENCODE_SERVER_PORT}" >&2
         echo "Last 200 lines of ${OPENCODE_LOG}:" >&2
         tail -n 200 "${OPENCODE_LOG}" >&2 || true
         exit 1
     fi
-    sleep 2
+    sleep 1
 done
-echo "[INFO] OpenCode server is responding: http://${OPENCODE_HOST}:${OPENCODE_SERVER_PORT}/doc"
+echo "[INFO] OpenCode server is listening on ${OPENCODE_HOST}:${OPENCODE_SERVER_PORT}"
 
 echo "[INFO] Starting OpenCode Manager on ${OPENCODE_MANAGER_HOST}:${OPENCODE_MANAGER_PORT}"
 cd /opt/opencode-manager
