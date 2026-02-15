@@ -10,16 +10,12 @@ on:
         description: "Docker image version tag, or use auto (default)"
         required: false
         default: auto
-      comfyui_version:
-        description: "ComfyUI runtime version used in Dockerfile (default: Dockerfile ARG COMFYUI_VERSION)"
+      opencode_version:
+        description: "OpenCode version for build-arg OPENCODE_VERSION (default: Dockerfile ARG)"
         required: false
-      ollama_version:
-        description: "Ollama version for build-arg OLLAMA_VERSION (default: Dockerfile ARG OLLAMA_VERSION)"
+      opencode_manager_ref:
+        description: "Git ref/tag for opencode-manager build-arg OPENCODE_MANAGER_REF (default: Dockerfile ARG)"
         required: false
-      sidecar_source_image:
-        description: "Source image for GLM5 sidecar mirror (default: ghcr.io/ggml-org/llama.cpp:server-cuda)"
-        required: false
-        default: ghcr.io/ggml-org/llama.cpp:server-cuda
       push_latest:
         description: "Also push latest tag"
         required: false
@@ -28,11 +24,8 @@ on:
 
 env:
   REGISTRY: registry.cn-shenzhen.aliyuncs.com
-  MAIN_REPOSITORY: sailfish/runnode-run-comfyui-ollama
-  MAIN_IMAGE: registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama
-  SIDECAR_REPOSITORY: sailfish/runnode-llamacpp-glm5
-  SIDECAR_IMAGE: registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-llamacpp-glm5
-  DEFAULT_SIDECAR_SOURCE_IMAGE: ghcr.io/ggml-org/llama.cpp:server-cuda
+  MAIN_REPOSITORY: sailfish/runnode-llamacpp-glm47-opencode
+  MAIN_IMAGE: registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-llamacpp-glm47-opencode
 
 jobs:
   docker-main:
@@ -80,25 +73,25 @@ jobs:
         id: component_versions
         shell: bash
         run: |
-          DOCKERFILE_COMFYUI_VERSION="$(sed -n 's/^ARG COMFYUI_VERSION=\(.*\)$/\1/p' Dockerfile | head -n 1)"
-          DOCKERFILE_OLLAMA_VERSION="$(sed -n 's/^ARG OLLAMA_VERSION=\(.*\)$/\1/p' Dockerfile | head -n 1)"
+          DOCKERFILE_OPENCODE_VERSION="$(sed -n 's/^ARG OPENCODE_VERSION=\(.*\)$/\1/p' Dockerfile | head -n 1)"
+          DOCKERFILE_OPENCODE_MANAGER_REF="$(sed -n 's/^ARG OPENCODE_MANAGER_REF=\(.*\)$/\1/p' Dockerfile | head -n 1)"
 
-          COMFYUI_VERSION_INPUT="${{ github.event.inputs.comfyui_version }}"
-          OLLAMA_VERSION_INPUT="${{ github.event.inputs.ollama_version }}"
+          OPENCODE_VERSION_INPUT="${{ github.event.inputs.opencode_version }}"
+          OPENCODE_MANAGER_REF_INPUT="${{ github.event.inputs.opencode_manager_ref }}"
 
-          COMFYUI_VERSION="${COMFYUI_VERSION_INPUT:-$DOCKERFILE_COMFYUI_VERSION}"
-          OLLAMA_VERSION="${OLLAMA_VERSION_INPUT:-$DOCKERFILE_OLLAMA_VERSION}"
+          OPENCODE_VERSION="${OPENCODE_VERSION_INPUT:-$DOCKERFILE_OPENCODE_VERSION}"
+          OPENCODE_MANAGER_REF="${OPENCODE_MANAGER_REF_INPUT:-$DOCKERFILE_OPENCODE_MANAGER_REF}"
 
-          COMFYUI_TAG_SAFE="${COMFYUI_VERSION//[^a-zA-Z0-9._-]/-}"
-          OLLAMA_TAG_SAFE="${OLLAMA_VERSION//[^a-zA-Z0-9._-]/-}"
-          FULL_TAG="${{ steps.version.outputs.version }}-comfyui-${COMFYUI_TAG_SAFE}-ollama-${OLLAMA_TAG_SAFE}"
+          OPENCODE_TAG_SAFE="${OPENCODE_VERSION//[^a-zA-Z0-9._-]/-}"
+          MANAGER_TAG_SAFE="${OPENCODE_MANAGER_REF//[^a-zA-Z0-9._-]/-}"
+          FULL_TAG="${{ steps.version.outputs.version }}-llamacpp-opencode-${OPENCODE_TAG_SAFE}-manager-${MANAGER_TAG_SAFE}"
 
-          echo "comfyui_version=${COMFYUI_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "ollama_version=${OLLAMA_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "opencode_version=${OPENCODE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "opencode_manager_ref=${OPENCODE_MANAGER_REF}" >> "$GITHUB_OUTPUT"
           echo "full_tag=${FULL_TAG}" >> "$GITHUB_OUTPUT"
 
-          echo "ComfyUI version: ${COMFYUI_VERSION}"
-          echo "Ollama version: ${OLLAMA_VERSION}"
+          echo "OpenCode version: ${OPENCODE_VERSION}"
+          echo "OpenCode Manager ref: ${OPENCODE_MANAGER_REF}"
           echo "Full image tag: ${FULL_TAG}"
 
       - name: Log in to Alibaba Cloud ACR
@@ -115,8 +108,8 @@ jobs:
           file: ./Dockerfile
           push: true
           build-args: |
-            COMFYUI_VERSION=${{ steps.component_versions.outputs.comfyui_version }}
-            OLLAMA_VERSION=${{ steps.component_versions.outputs.ollama_version }}
+            OPENCODE_VERSION=${{ steps.component_versions.outputs.opencode_version }}
+            OPENCODE_MANAGER_REF=${{ steps.component_versions.outputs.opencode_manager_ref }}
           tags: |
             ${{ env.MAIN_IMAGE }}:${{ steps.component_versions.outputs.full_tag }}
           cache-from: type=gha
@@ -129,66 +122,3 @@ jobs:
           docker buildx imagetools create \
             --tag "${MAIN_IMAGE}:latest" \
             "${MAIN_IMAGE}:${{ steps.component_versions.outputs.full_tag }}"
-
-  docker-sidecar-mirror:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Resolve image version
-        id: version
-        shell: bash
-        run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            IMAGE_VERSION_INPUT="${{ github.event.inputs.image_version }}"
-            if [[ -z "${IMAGE_VERSION_INPUT}" || "${IMAGE_VERSION_INPUT}" == "auto" ]]; then
-              VERSION="$(date +%Y%m%d)-${GITHUB_SHA::7}"
-            else
-              VERSION="${IMAGE_VERSION_INPUT}"
-            fi
-          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            VERSION="${GITHUB_REF_NAME}"
-          else
-            VERSION="$(date +%Y%m%d)-${GITHUB_SHA::7}"
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Image version: ${VERSION}"
-
-      - name: Resolve sidecar source image and tag
-        id: sidecar
-        shell: bash
-        run: |
-          SIDECAR_SOURCE_INPUT="${{ github.event.inputs.sidecar_source_image }}"
-          SIDECAR_SOURCE="${SIDECAR_SOURCE_INPUT:-${DEFAULT_SIDECAR_SOURCE_IMAGE}}"
-          SIDECAR_TAG="${{ steps.version.outputs.version }}-llamacpp-official"
-
-          echo "source=${SIDECAR_SOURCE}" >> "$GITHUB_OUTPUT"
-          echo "tag=${SIDECAR_TAG}" >> "$GITHUB_OUTPUT"
-
-          echo "Sidecar source image: ${SIDECAR_SOURCE}"
-          echo "Sidecar target tag: ${SIDECAR_TAG}"
-
-      - name: Log in to Alibaba Cloud ACR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.ALICLOUD_REGISTRY_USERNAME }}
-          password: ${{ secrets.ALICLOUD_REGISTRY_PASSWORD }}
-
-      - name: Mirror sidecar image to ACR
-        shell: bash
-        run: |
-          docker buildx imagetools create \
-            --tag "${SIDECAR_IMAGE}:${{ steps.sidecar.outputs.tag }}" \
-            "${{ steps.sidecar.outputs.source }}"
-
-      - name: Tag and push latest
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.push_latest == 'true'
-        shell: bash
-        run: |
-          docker buildx imagetools create \
-            --tag "${SIDECAR_IMAGE}:latest" \
-            "${SIDECAR_IMAGE}:${{ steps.sidecar.outputs.tag }}"
