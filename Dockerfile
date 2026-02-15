@@ -16,6 +16,7 @@ RUN set -eux; \
       npm \
       python3 \
       python3-pip; \
+    npm install -g corepack; \
     corepack enable; \
     corepack prepare pnpm@10.28.1 --activate; \
     curl -fsSL https://bun.sh/install | bash; \
