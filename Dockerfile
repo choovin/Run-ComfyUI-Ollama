@@ -1,7 +1,7 @@
 FROM ghcr.io/ggml-org/llama.cpp:server-cuda
 
 ARG OPENCODE_VERSION=latest
-ARG OPENCODE_MANAGER_REF=v0.8.29
+ARG OPENCODE_MANAGER_REF=main
 
 WORKDIR /workspace
 
