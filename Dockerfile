@@ -14,10 +14,13 @@ RUN set -eux; \
       ca-certificates \
       curl \
       git \
+      iproute2 \
       jq \
       lsof \
+      procps \
       python3 \
       python3-pip \
+      ripgrep \
       xz-utils \
       unzip; \
     curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" -o /tmp/node.tar.xz; \

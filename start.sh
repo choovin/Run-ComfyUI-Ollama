@@ -26,6 +26,9 @@ DATABASE_PATH="${DATABASE_PATH:-/workspace/opencode-manager/data/opencode.db}"
 AUTH_TRUSTED_ORIGINS="${AUTH_TRUSTED_ORIGINS:-http://127.0.0.1:${OPENCODE_MANAGER_PORT},http://localhost:${OPENCODE_MANAGER_PORT}}"
 AUTH_SECURE_COOKIES="${AUTH_SECURE_COOKIES:-false}"
 
+OPENCODE_HOST="${OPENCODE_HOST:-127.0.0.1}"
+OPENCODE_SERVER_PORT="${OPENCODE_SERVER_PORT:-5551}"
+
 if [[ ! -f "${LLAMACPP_MODEL_PATH}" ]]; then
     echo "ERROR: GGUF model not found: ${LLAMACPP_MODEL_PATH}" >&2
     echo "Set LLAMACPP_MODEL_PATH to your GLM-4.7-Flash quantized GGUF file path." >&2
@@ -45,16 +48,49 @@ export WORKSPACE_PATH
 export DATABASE_PATH
 export AUTH_TRUSTED_ORIGINS
 export AUTH_SECURE_COOKIES
+export OPENCODE_HOST
+export OPENCODE_SERVER_PORT
 mkdir -p "$(dirname "${DATABASE_PATH}")"
 
 cleanup() {
     local code=$?
     if [[ -n "${PID_MANAGER:-}" ]]; then kill "${PID_MANAGER}" 2>/dev/null || true; fi
+    if [[ -n "${PID_OPENCODE:-}" ]]; then kill "${PID_OPENCODE}" 2>/dev/null || true; fi
     if [[ -n "${PID_LLAMA:-}" ]]; then kill "${PID_LLAMA}" 2>/dev/null || true; fi
     wait || true
     exit "${code}"
 }
 trap cleanup EXIT INT TERM
+
+echo "[INFO] Prestarting OpenCode server on ${OPENCODE_HOST}:${OPENCODE_SERVER_PORT} (so manager won't hit 30s health timeout)"
+if ! command -v opencode >/dev/null 2>&1; then
+    echo "ERROR: opencode binary not found in PATH: ${PATH}" >&2
+    exit 1
+fi
+echo "[INFO] OpenCode version output:"
+opencode --version || true
+
+mkdir -p "${WORKSPACE_PATH}/.config/opencode" "${WORKSPACE_PATH}/.opencode/state"
+export XDG_DATA_HOME="${WORKSPACE_PATH}/.opencode/state"
+export XDG_CONFIG_HOME="${WORKSPACE_PATH}/.config"
+export OPENCODE_CONFIG="${WORKSPACE_PATH}/.config/opencode/opencode.json"
+
+OPENCODE_LOG="/tmp/opencode-serve.log"
+cd "${WORKSPACE_PATH}"
+opencode serve --port "${OPENCODE_SERVER_PORT}" --hostname "${OPENCODE_HOST}" >"${OPENCODE_LOG}" 2>&1 &
+PID_OPENCODE=$!
+
+deadline=$((SECONDS+180))
+until curl -fsS "http://${OPENCODE_HOST}:${OPENCODE_SERVER_PORT}/doc" >/dev/null 2>&1; do
+    if (( SECONDS > deadline )); then
+        echo "ERROR: opencode did not become healthy within 180s: http://${OPENCODE_HOST}:${OPENCODE_SERVER_PORT}/doc" >&2
+        echo "Last 200 lines of ${OPENCODE_LOG}:" >&2
+        tail -n 200 "${OPENCODE_LOG}" >&2 || true
+        exit 1
+    fi
+    sleep 2
+done
+echo "[INFO] OpenCode server is responding: http://${OPENCODE_HOST}:${OPENCODE_SERVER_PORT}/doc"
 
 echo "[INFO] Starting OpenCode Manager on ${OPENCODE_MANAGER_HOST}:${OPENCODE_MANAGER_PORT}"
 cd /opt/opencode-manager
