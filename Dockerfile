@@ -41,7 +41,7 @@ RUN set -eux; \
     ln -sf /opt/opencode/bin/opencode /usr/local/bin/opencode; \
     git clone --depth 1 --branch "${OPENCODE_MANAGER_REF}" https://github.com/chriswritescode-dev/opencode-manager.git /opt/opencode-manager; \
     cd /opt/opencode-manager; \
-    python3 -c 'import re,sys; from pathlib import Path; p=Path("backend/src/services/opencode-single-server.ts"); t=p.read_text(encoding="utf-8"); ("/global/health" in t) and (print("opencode-manager already uses /global/health") or sys.exit(0)); pat=re.compile(r"`http://\\$\\{OPENCODE_SERVER_HOST\\}:\\$\\{OPENCODE_SERVER_PORT\\}/doc`"); nt,n=pat.subn("`http://${OPENCODE_SERVER_HOST}:${OPENCODE_SERVER_PORT}/global/health`", t, count=1); (n==1) or sys.exit("Failed to patch health URL in opencode-single-server.ts"); p.write_text(nt,encoding="utf-8"); print("Patched opencode-manager health URL: /doc -> /global/health")'; \
+    python3 -c 'import re,sys; from pathlib import Path; p=Path("backend/src/services/opencode-single-server.ts"); t=p.read_text(encoding="utf-8"); ("/global/health" in t) and (print("opencode-manager already uses /global/health") or sys.exit(0)); pat=re.compile(r"/doc`"); nt,n=pat.subn("/global/health`", t, count=1); (n==1) or sys.exit("Failed to patch health URL in opencode-single-server.ts"); p.write_text(nt,encoding="utf-8"); print("Patched opencode-manager health URL: /doc -> /global/health")'; \
     pnpm install --frozen-lockfile; \
     pnpm build; \
     mkdir -p /opt/opencode-manager/backend/node_modules/@opencode-manager /workspace/opencode-manager/data; \
