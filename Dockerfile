@@ -15,7 +15,8 @@ RUN set -eux; \
       jq \
       python3 \
       python3-pip \
-      xz-utils; \
+      xz-utils \
+      unzip; \
     curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" -o /tmp/node.tar.xz; \
     tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1; \
     rm -f /tmp/node.tar.xz; \
