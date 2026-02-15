@@ -3,6 +3,10 @@ set -euo pipefail
 
 echo "[INFO] Starting services: llama.cpp + OpenCode Manager"
 
+# Ensure llama.cpp runtime shared libraries can be resolved.
+# Some upstream images place llama-server and its .so files under /app.
+export LD_LIBRARY_PATH="/app:/opt/llama/bin:/usr/local/lib:${LD_LIBRARY_PATH:-}"
+
 LLAMACPP_HOST="${LLAMACPP_HOST:-0.0.0.0}"
 LLAMACPP_PORT="${LLAMACPP_PORT:-8080}"
 LLAMACPP_MODEL_PATH="${LLAMACPP_MODEL_PATH:-/models/glm-4.7-flash-q4_k_m.gguf}"

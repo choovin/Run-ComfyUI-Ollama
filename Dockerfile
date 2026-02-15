@@ -6,6 +6,8 @@ ARG NODE_VERSION=22.14.0
 
 WORKDIR /workspace
 
+ENV LD_LIBRARY_PATH="/app:/opt/llama/bin:/usr/local/lib:${LD_LIBRARY_PATH}"
+
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
