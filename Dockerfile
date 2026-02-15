@@ -2,6 +2,7 @@ FROM ghcr.io/ggml-org/llama.cpp:server-cuda
 
 ARG OPENCODE_VERSION=latest
 ARG OPENCODE_MANAGER_REF=main
+ARG NODE_VERSION=22.14.0
 
 WORKDIR /workspace
 
@@ -12,11 +13,12 @@ RUN set -eux; \
       curl \
       git \
       jq \
-      nodejs \
-      npm \
       python3 \
-      python3-pip; \
-    npm install -g corepack; \
+      python3-pip \
+      xz-utils; \
+    curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" -o /tmp/node.tar.xz; \
+    tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1; \
+    rm -f /tmp/node.tar.xz; \
     corepack enable; \
     corepack prepare pnpm@10.28.1 --activate; \
     curl -fsSL https://bun.sh/install | bash; \
