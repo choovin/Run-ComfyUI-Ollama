@@ -47,4 +47,4 @@ COPY --chmod=755 start.sh /start.sh
 # llama.cpp + OpenCode Manager
 EXPOSE 8080 5003
 
-CMD ["/start.sh"]
+ENTRYPOINT ["/start.sh"]
