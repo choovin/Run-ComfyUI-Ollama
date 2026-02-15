@@ -6,6 +6,7 @@ echo "[INFO] Starting services: llama.cpp + OpenCode Manager"
 # Ensure llama.cpp runtime shared libraries can be resolved.
 # Some upstream images place llama-server and its .so files under /app.
 export LD_LIBRARY_PATH="/app:/opt/llama/bin:/usr/local/lib:${LD_LIBRARY_PATH:-}"
+export PATH="/app:/opt/llama/bin:${PATH}"
 
 LLAMACPP_HOST="${LLAMACPP_HOST:-0.0.0.0}"
 LLAMACPP_PORT="${LLAMACPP_PORT:-8080}"
@@ -66,8 +67,21 @@ done
 echo "[INFO] OpenCode Manager ready: http://127.0.0.1:${OPENCODE_MANAGER_PORT}"
 
 echo "[INFO] Starting llama-server on ${LLAMACPP_HOST}:${LLAMACPP_PORT}"
+LLAMACPP_BIN="${LLAMACPP_BIN:-}"
+if [[ -z "${LLAMACPP_BIN}" ]]; then
+    if command -v llama-server >/dev/null 2>&1; then
+        LLAMACPP_BIN="llama-server"
+    elif [[ -x "/app/llama-server" ]]; then
+        LLAMACPP_BIN="/app/llama-server"
+    elif [[ -x "/opt/llama/bin/llama-server" ]]; then
+        LLAMACPP_BIN="/opt/llama/bin/llama-server"
+    else
+        echo "ERROR: llama-server not found in PATH, /app, or /opt/llama/bin" >&2
+        exit 1
+    fi
+fi
 CMD=(
-  llama-server
+  "${LLAMACPP_BIN}"
   --host "${LLAMACPP_HOST}"
   --port "${LLAMACPP_PORT}"
   --model "${LLAMACPP_MODEL_PATH}"

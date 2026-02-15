@@ -15,6 +15,7 @@ RUN set -eux; \
       curl \
       git \
       jq \
+      lsof \
       python3 \
       python3-pip \
       xz-utils \
