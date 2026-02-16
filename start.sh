@@ -26,6 +26,9 @@ MODEL_PATH_GLM5="${MODEL_PATH_GLM5:-}"
 MODEL_PATH_GLM47FLASH="${MODEL_PATH_GLM47FLASH:-}"
 MODEL_PATH_MINIMAX25="${MODEL_PATH_MINIMAX25:-}"
 MODEL_PATH_KIMI25="${MODEL_PATH_KIMI25:-}"
+AUTO_DOWNLOAD_MINIMAX25="${AUTO_DOWNLOAD_MINIMAX25:-false}"
+MINIMAX25_DOWNLOAD_URL="${MINIMAX25_DOWNLOAD_URL:-}"
+MINIMAX25_DOWNLOAD_TOKEN="${MINIMAX25_DOWNLOAD_TOKEN:-${HF_TOKEN:-}}"
 
 if [[ -z "${LLAMACPP_CTX_SIZE}" ]]; then
     case "${GPU_PROFILE}" in
@@ -46,7 +49,7 @@ if [[ -z "${LLAMACPP_MODEL_PATH}" ]]; then
             LLAMACPP_ALIAS="${LLAMACPP_ALIAS:-glm47flash}"
             ;;
         minimax25|minimax-2.5|minimax2.5)
-            LLAMACPP_MODEL_PATH="${MODEL_PATH_MINIMAX25}"
+            LLAMACPP_MODEL_PATH="${MODEL_PATH_MINIMAX25:-/models/downloads/minimax25/minimax2.5.gguf}"
             LLAMACPP_ALIAS="${LLAMACPP_ALIAS:-minimax25}"
             ;;
         kimi25|kimi-2.5|kimi2.5)
@@ -64,6 +67,32 @@ if [[ -z "${LLAMACPP_ALIAS}" ]]; then
     LLAMACPP_ALIAS="model"
 fi
 
+# Optional: auto-download minimax2.5 GGUF on first boot if file is missing.
+if [[ "${MODEL_PRESET}" == "minimax25" || "${MODEL_PRESET}" == "minimax-2.5" || "${MODEL_PRESET}" == "minimax2.5" ]]; then
+    if [[ ! -f "${LLAMACPP_MODEL_PATH}" && "${AUTO_DOWNLOAD_MINIMAX25}" == "true" ]]; then
+        if [[ -z "${MINIMAX25_DOWNLOAD_URL}" ]]; then
+            echo "ERROR: MINIMAX25 model missing and MINIMAX25_DOWNLOAD_URL is not set." >&2
+            exit 1
+        fi
+
+        echo "[INFO] MiniMax2.5 GGUF not found, downloading first-time model..."
+        mkdir -p "$(dirname "${LLAMACPP_MODEL_PATH}")"
+        TMP_PATH="${LLAMACPP_MODEL_PATH}.part"
+
+        if [[ -n "${MINIMAX25_DOWNLOAD_TOKEN}" ]]; then
+            curl -L --fail --retry 5 --retry-delay 5 -C - \
+              -H "Authorization: Bearer ${MINIMAX25_DOWNLOAD_TOKEN}" \
+              -o "${TMP_PATH}" "${MINIMAX25_DOWNLOAD_URL}"
+        else
+            curl -L --fail --retry 5 --retry-delay 5 -C - \
+              -o "${TMP_PATH}" "${MINIMAX25_DOWNLOAD_URL}"
+        fi
+
+        mv -f "${TMP_PATH}" "${LLAMACPP_MODEL_PATH}"
+        echo "[INFO] MiniMax2.5 GGUF downloaded to ${LLAMACPP_MODEL_PATH}"
+    fi
+fi
+
 OPENCODE_MANAGER_HOST="${OPENCODE_MANAGER_HOST:-0.0.0.0}"
 OPENCODE_MANAGER_PORT="${OPENCODE_MANAGER_PORT:-5003}"
 NODE_ENV="${NODE_ENV:-production}"
@@ -72,7 +101,7 @@ DATABASE_PATH="${DATABASE_PATH:-/workspace/opencode-manager/data/opencode.db}"
 AUTH_TRUSTED_ORIGINS="${AUTH_TRUSTED_ORIGINS:-http://127.0.0.1:${OPENCODE_MANAGER_PORT},http://localhost:${OPENCODE_MANAGER_PORT}}"
 AUTH_SECURE_COOKIES="${AUTH_SECURE_COOKIES:-false}"
 
-OPENCODE_HOST="${OPENCODE_HOST:-127.0.0.1}"
+OPENCODE_HOST="${OPENCODE_HOST:-0.0.0.0}"
 OPENCODE_SERVER_PORT="${OPENCODE_SERVER_PORT:-5551}"
 
 if [[ -z "${LLAMACPP_MODEL_PATH}" ]]; then
