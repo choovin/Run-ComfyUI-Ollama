@@ -10,13 +10,59 @@ export PATH="/app:/opt/llama/bin:${PATH}"
 
 LLAMACPP_HOST="${LLAMACPP_HOST:-0.0.0.0}"
 LLAMACPP_PORT="${LLAMACPP_PORT:-8080}"
-LLAMACPP_MODEL_PATH="${LLAMACPP_MODEL_PATH:-/models/glm-4.7-flash-q4_k_m.gguf}"
-LLAMACPP_ALIAS="${LLAMACPP_ALIAS:-glm47flash}"
-LLAMACPP_CTX_SIZE="${LLAMACPP_CTX_SIZE:-8192}"
+LLAMACPP_MODEL_PATH="${LLAMACPP_MODEL_PATH:-}"
+LLAMACPP_ALIAS="${LLAMACPP_ALIAS:-}"
+LLAMACPP_CTX_SIZE="${LLAMACPP_CTX_SIZE:-}"
 LLAMACPP_N_GPU_LAYERS="${LLAMACPP_N_GPU_LAYERS:-999}"
 LLAMACPP_THREADS="${LLAMACPP_THREADS:-16}"
 LLAMACPP_PARALLEL="${LLAMACPP_PARALLEL:-1}"
 LLAMACPP_EXTRA_ARGS="${LLAMACPP_EXTRA_ARGS:-}"
+
+# Model selection (GGUF) via preset + per-model path env vars.
+# If LLAMACPP_MODEL_PATH is set, it always wins.
+MODEL_PRESET="${MODEL_PRESET:-${LLAMACPP_MODEL_PRESET:-glm47flash}}"
+GPU_PROFILE="${GPU_PROFILE:-${LLAMACPP_GPU_PROFILE:-71g}}" # "71g" or "35g" (used only for defaults)
+MODEL_PATH_GLM5="${MODEL_PATH_GLM5:-}"
+MODEL_PATH_GLM47FLASH="${MODEL_PATH_GLM47FLASH:-}"
+MODEL_PATH_MINIMAX25="${MODEL_PATH_MINIMAX25:-}"
+MODEL_PATH_KIMI25="${MODEL_PATH_KIMI25:-}"
+
+if [[ -z "${LLAMACPP_CTX_SIZE}" ]]; then
+    case "${GPU_PROFILE}" in
+        71g) LLAMACPP_CTX_SIZE="8192" ;;
+        35g) LLAMACPP_CTX_SIZE="4096" ;;
+        *)   LLAMACPP_CTX_SIZE="8192" ;;
+    esac
+fi
+
+if [[ -z "${LLAMACPP_MODEL_PATH}" ]]; then
+    case "${MODEL_PRESET}" in
+        glm5|glm-5)
+            LLAMACPP_MODEL_PATH="${MODEL_PATH_GLM5}"
+            LLAMACPP_ALIAS="${LLAMACPP_ALIAS:-glm5}"
+            ;;
+        glm47flash|glm47|glm-4.7-flash|glm-4.7)
+            LLAMACPP_MODEL_PATH="${MODEL_PATH_GLM47FLASH}"
+            LLAMACPP_ALIAS="${LLAMACPP_ALIAS:-glm47flash}"
+            ;;
+        minimax25|minimax-2.5|minimax2.5)
+            LLAMACPP_MODEL_PATH="${MODEL_PATH_MINIMAX25}"
+            LLAMACPP_ALIAS="${LLAMACPP_ALIAS:-minimax25}"
+            ;;
+        kimi25|kimi-2.5|kimi2.5)
+            LLAMACPP_MODEL_PATH="${MODEL_PATH_KIMI25}"
+            LLAMACPP_ALIAS="${LLAMACPP_ALIAS:-kimi25}"
+            ;;
+        *)
+            echo "ERROR: Unknown MODEL_PRESET='${MODEL_PRESET}'. Supported: glm5, glm47flash, minimax25, kimi25" >&2
+            exit 1
+            ;;
+    esac
+fi
+
+if [[ -z "${LLAMACPP_ALIAS}" ]]; then
+    LLAMACPP_ALIAS="model"
+fi
 
 OPENCODE_MANAGER_HOST="${OPENCODE_MANAGER_HOST:-0.0.0.0}"
 OPENCODE_MANAGER_PORT="${OPENCODE_MANAGER_PORT:-5003}"
@@ -29,9 +75,18 @@ AUTH_SECURE_COOKIES="${AUTH_SECURE_COOKIES:-false}"
 OPENCODE_HOST="${OPENCODE_HOST:-127.0.0.1}"
 OPENCODE_SERVER_PORT="${OPENCODE_SERVER_PORT:-5551}"
 
+if [[ -z "${LLAMACPP_MODEL_PATH}" ]]; then
+    echo "ERROR: No model selected." >&2
+    echo "Set either LLAMACPP_MODEL_PATH directly, or set MODEL_PRESET + corresponding MODEL_PATH_*." >&2
+    echo "Examples:" >&2
+    echo "  MODEL_PRESET=glm47flash MODEL_PATH_GLM47FLASH=/models/<your-glm47flash>.gguf" >&2
+    echo "  MODEL_PRESET=glm5 MODEL_PATH_GLM5=/models/<your-glm5>.gguf" >&2
+    exit 1
+fi
+
 if [[ ! -f "${LLAMACPP_MODEL_PATH}" ]]; then
     echo "ERROR: GGUF model not found: ${LLAMACPP_MODEL_PATH}" >&2
-    echo "Set LLAMACPP_MODEL_PATH to your GLM-4.7-Flash quantized GGUF file path." >&2
+    echo "Check your /models mount and MODEL_PATH_* / LLAMACPP_MODEL_PATH settings." >&2
     exit 1
 fi
 
