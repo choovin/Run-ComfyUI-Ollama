@@ -68,9 +68,10 @@ if [[ -z "${LLAMACPP_ALIAS}" ]]; then
     LLAMACPP_ALIAS="model"
 fi
 
-# Optional: auto-download minimax2.5 GGUF on first boot if file is missing.
+# Optional: auto-download minimax2.5 GGUF on first boot.
+# For split GGUF, we verify all shards and download missing ones.
 if [[ "${MODEL_PRESET}" == "minimax25" || "${MODEL_PRESET}" == "minimax-2.5" || "${MODEL_PRESET}" == "minimax2.5" ]]; then
-    if [[ ! -f "${LLAMACPP_MODEL_PATH}" && "${AUTO_DOWNLOAD_MINIMAX25}" == "true" ]]; then
+    if [[ "${AUTO_DOWNLOAD_MINIMAX25}" == "true" ]]; then
         if [[ -z "${MINIMAX25_DOWNLOAD_URL}" ]]; then
             if [[ -z "${MINIMAX25_DOWNLOAD_URLS}" ]]; then
                 echo "ERROR: MINIMAX25 model missing and MINIMAX25_DOWNLOAD_URL / MINIMAX25_DOWNLOAD_URLS are not set." >&2
@@ -78,12 +79,27 @@ if [[ "${MODEL_PRESET}" == "minimax25" || "${MODEL_PRESET}" == "minimax-2.5" || 
             fi
         fi
 
-        echo "[INFO] MiniMax2.5 GGUF not found, downloading first-time model..."
         mkdir -p "$(dirname "${LLAMACPP_MODEL_PATH}")"
         MODEL_DIR="$(dirname "${LLAMACPP_MODEL_PATH}")"
 
         if [[ -n "${MINIMAX25_DOWNLOAD_URLS}" ]]; then
             IFS=',' read -r -a URL_ARR <<< "${MINIMAX25_DOWNLOAD_URLS}"
+            needs_download="false"
+            for url in "${URL_ARR[@]}"; do
+                clean_url="$(echo "${url}" | xargs)"
+                [[ -z "${clean_url}" ]] && continue
+                filename="$(basename "${clean_url%%\?*}")"
+                target_path="${MODEL_DIR}/${filename}"
+                if [[ ! -f "${target_path}" ]]; then
+                    needs_download="true"
+                    break
+                fi
+            done
+
+            if [[ "${needs_download}" != "true" ]]; then
+                echo "[INFO] MiniMax2.5 GGUF shards already present in ${MODEL_DIR}, skip download."
+            fi
+
             for url in "${URL_ARR[@]}"; do
                 clean_url="$(echo "${url}" | xargs)"
                 [[ -z "${clean_url}" ]] && continue
@@ -91,6 +107,11 @@ if [[ "${MODEL_PRESET}" == "minimax25" || "${MODEL_PRESET}" == "minimax-2.5" || 
                 filename="$(basename "${clean_url%%\?*}")"
                 target_path="${MODEL_DIR}/${filename}"
                 tmp_path="${target_path}.part"
+
+                if [[ -f "${target_path}" ]]; then
+                    echo "[INFO] Shard exists, skip: ${filename}"
+                    continue
+                fi
 
                 echo "[INFO] Downloading shard: ${filename}"
                 if [[ -n "${MINIMAX25_DOWNLOAD_TOKEN}" ]]; then
@@ -105,17 +126,23 @@ if [[ "${MODEL_PRESET}" == "minimax25" || "${MODEL_PRESET}" == "minimax-2.5" || 
             done
             echo "[INFO] MiniMax2.5 GGUF shards downloaded to ${MODEL_DIR}"
         else
-            TMP_PATH="${LLAMACPP_MODEL_PATH}.part"
-            if [[ -n "${MINIMAX25_DOWNLOAD_TOKEN}" ]]; then
-                curl -L --fail --retry 5 --retry-delay 5 -C - \
-                  -H "Authorization: Bearer ${MINIMAX25_DOWNLOAD_TOKEN}" \
-                  -o "${TMP_PATH}" "${MINIMAX25_DOWNLOAD_URL}"
-            else
-                curl -L --fail --retry 5 --retry-delay 5 -C - \
-                  -o "${TMP_PATH}" "${MINIMAX25_DOWNLOAD_URL}"
+            if [[ -f "${LLAMACPP_MODEL_PATH}" ]]; then
+                echo "[INFO] MiniMax2.5 GGUF already present: ${LLAMACPP_MODEL_PATH}, skip download."
             fi
-            mv -f "${TMP_PATH}" "${LLAMACPP_MODEL_PATH}"
-            echo "[INFO] MiniMax2.5 GGUF downloaded to ${LLAMACPP_MODEL_PATH}"
+            TMP_PATH="${LLAMACPP_MODEL_PATH}.part"
+            if [[ ! -f "${LLAMACPP_MODEL_PATH}" ]]; then
+                echo "[INFO] MiniMax2.5 GGUF not found, downloading first-time model..."
+                if [[ -n "${MINIMAX25_DOWNLOAD_TOKEN}" ]]; then
+                    curl -L --fail --retry 5 --retry-delay 5 -C - \
+                      -H "Authorization: Bearer ${MINIMAX25_DOWNLOAD_TOKEN}" \
+                      -o "${TMP_PATH}" "${MINIMAX25_DOWNLOAD_URL}"
+                else
+                    curl -L --fail --retry 5 --retry-delay 5 -C - \
+                      -o "${TMP_PATH}" "${MINIMAX25_DOWNLOAD_URL}"
+                fi
+                mv -f "${TMP_PATH}" "${LLAMACPP_MODEL_PATH}"
+                echo "[INFO] MiniMax2.5 GGUF downloaded to ${LLAMACPP_MODEL_PATH}"
+            fi
         fi
     fi
 fi
