@@ -26,6 +26,20 @@ MODEL_PATH_GLM5="${MODEL_PATH_GLM5:-}"
 MODEL_PATH_GLM47FLASH="${MODEL_PATH_GLM47FLASH:-}"
 MODEL_PATH_MINIMAX25="${MODEL_PATH_MINIMAX25:-}"
 MODEL_PATH_KIMI25="${MODEL_PATH_KIMI25:-}"
+
+# Generic model auto-download knobs (recommended for future presets/quantizations)
+MODEL_AUTO_DOWNLOAD="${MODEL_AUTO_DOWNLOAD:-false}"
+MODEL_DOWNLOAD_URL="${MODEL_DOWNLOAD_URL:-}"
+MODEL_DOWNLOAD_URLS="${MODEL_DOWNLOAD_URLS:-}"
+MODEL_DOWNLOAD_TOKEN="${MODEL_DOWNLOAD_TOKEN:-${HF_TOKEN:-}}"
+MODEL_DOWNLOAD_FALLBACK_ENABLED="${MODEL_DOWNLOAD_FALLBACK_ENABLED:-true}"
+HF_MIRROR_BASE="${HF_MIRROR_BASE:-https://hf-mirror.com}"
+MODELSCOPE_BASE="${MODELSCOPE_BASE:-https://modelscope.cn}"
+
+# Legacy per-model download knobs (kept for backward compatibility)
+AUTO_DOWNLOAD_GLM47FLASH="${AUTO_DOWNLOAD_GLM47FLASH:-false}"
+GLM47FLASH_DOWNLOAD_URL="${GLM47FLASH_DOWNLOAD_URL:-}"
+GLM47FLASH_DOWNLOAD_TOKEN="${GLM47FLASH_DOWNLOAD_TOKEN:-${HF_TOKEN:-}}"
 AUTO_DOWNLOAD_MINIMAX25="${AUTO_DOWNLOAD_MINIMAX25:-false}"
 MINIMAX25_DOWNLOAD_URL="${MINIMAX25_DOWNLOAD_URL:-}"
 MINIMAX25_DOWNLOAD_URLS="${MINIMAX25_DOWNLOAD_URLS:-}"
@@ -68,81 +82,123 @@ if [[ -z "${LLAMACPP_ALIAS}" ]]; then
     LLAMACPP_ALIAS="model"
 fi
 
-# Optional: auto-download minimax2.5 GGUF on first boot.
-# For split GGUF, we verify all shards and download missing ones.
-if [[ "${MODEL_PRESET}" == "minimax25" || "${MODEL_PRESET}" == "minimax-2.5" || "${MODEL_PRESET}" == "minimax2.5" ]]; then
-    if [[ "${AUTO_DOWNLOAD_MINIMAX25}" == "true" ]]; then
-        if [[ -z "${MINIMAX25_DOWNLOAD_URL}" ]]; then
-            if [[ -z "${MINIMAX25_DOWNLOAD_URLS}" ]]; then
-                echo "ERROR: MINIMAX25 model missing and MINIMAX25_DOWNLOAD_URL / MINIMAX25_DOWNLOAD_URLS are not set." >&2
-                exit 1
+build_download_candidates() {
+    local url="$1"
+    local -a out=()
+    local stripped="${url#https://}"
+    stripped="${stripped#http://}"
+
+    # Priority for HF links: 1) ModelScope 2) HF mirror 3) HF origin
+    if [[ "${MODEL_DOWNLOAD_FALLBACK_ENABLED}" == "true" && "${stripped}" == huggingface.co/* ]]; then
+        local path="${stripped#huggingface.co/}"  # <repo>/resolve/<rev>/<file...>
+        out+=("${MODELSCOPE_BASE}/models/${path}")
+        out+=("${HF_MIRROR_BASE}/${path}")
+        out+=("${url}")
+    else
+        out+=("${url}")
+    fi
+
+    printf '%s\n' "${out[@]}"
+}
+
+download_to_file() {
+    local url="$1"
+    local dst="$2"
+    local token="${3:-}"
+    local tmp="${dst}.part"
+    local tried=0
+    while IFS= read -r candidate; do
+        [[ -z "${candidate}" ]] && continue
+        tried=$((tried + 1))
+        echo "[INFO] Download attempt ${tried}: ${candidate}"
+        if [[ -n "${token}" ]]; then
+            if curl -L --fail --retry 5 --retry-delay 5 -C - \
+              -H "Authorization: Bearer ${token}" \
+              -o "${tmp}" "${candidate}"; then
+                mv -f "${tmp}" "${dst}"
+                return 0
+            fi
+        else
+            if curl -L --fail --retry 5 --retry-delay 5 -C - \
+              -o "${tmp}" "${candidate}"; then
+                mv -f "${tmp}" "${dst}"
+                return 0
             fi
         fi
+        rm -f "${tmp}" || true
+    done < <(build_download_candidates "${url}")
 
-        mkdir -p "$(dirname "${LLAMACPP_MODEL_PATH}")"
-        MODEL_DIR="$(dirname "${LLAMACPP_MODEL_PATH}")"
+    echo "ERROR: Failed to download model from all candidate sources for: ${url}" >&2
+    return 1
+}
 
-        if [[ -n "${MINIMAX25_DOWNLOAD_URLS}" ]]; then
-            IFS=',' read -r -a URL_ARR <<< "${MINIMAX25_DOWNLOAD_URLS}"
-            needs_download="false"
-            for url in "${URL_ARR[@]}"; do
-                clean_url="$(echo "${url}" | xargs)"
-                [[ -z "${clean_url}" ]] && continue
-                filename="$(basename "${clean_url%%\?*}")"
-                target_path="${MODEL_DIR}/${filename}"
-                if [[ ! -f "${target_path}" ]]; then
-                    needs_download="true"
-                    break
-                fi
-            done
+# Backward-compatible mapping: old model-specific knobs -> generic knobs.
+if [[ "${MODEL_AUTO_DOWNLOAD}" != "true" && -z "${MODEL_DOWNLOAD_URL}" && -z "${MODEL_DOWNLOAD_URLS}" ]]; then
+    if [[ "${MODEL_PRESET}" == "glm47flash" || "${MODEL_PRESET}" == "glm47" || "${MODEL_PRESET}" == "glm-4.7-flash" || "${MODEL_PRESET}" == "glm-4.7" ]]; then
+        if [[ "${AUTO_DOWNLOAD_GLM47FLASH}" == "true" ]]; then
+            MODEL_AUTO_DOWNLOAD="true"
+            MODEL_DOWNLOAD_URL="${GLM47FLASH_DOWNLOAD_URL}"
+            MODEL_DOWNLOAD_TOKEN="${GLM47FLASH_DOWNLOAD_TOKEN}"
+        fi
+    elif [[ "${MODEL_PRESET}" == "minimax25" || "${MODEL_PRESET}" == "minimax-2.5" || "${MODEL_PRESET}" == "minimax2.5" ]]; then
+        if [[ "${AUTO_DOWNLOAD_MINIMAX25}" == "true" ]]; then
+            MODEL_AUTO_DOWNLOAD="true"
+            MODEL_DOWNLOAD_URL="${MINIMAX25_DOWNLOAD_URL}"
+            MODEL_DOWNLOAD_URLS="${MINIMAX25_DOWNLOAD_URLS}"
+            MODEL_DOWNLOAD_TOKEN="${MINIMAX25_DOWNLOAD_TOKEN}"
+        fi
+    fi
+fi
 
-            if [[ "${needs_download}" != "true" ]]; then
-                echo "[INFO] MiniMax2.5 GGUF shards already present in ${MODEL_DIR}, skip download."
+# Generic auto-download for any preset/quantization:
+# - single file: MODEL_DOWNLOAD_URL -> LLAMACPP_MODEL_PATH
+# - split files: MODEL_DOWNLOAD_URLS (comma-separated) -> dirname(LLAMACPP_MODEL_PATH)
+if [[ "${MODEL_AUTO_DOWNLOAD}" == "true" ]]; then
+    if [[ -z "${MODEL_DOWNLOAD_URL}" && -z "${MODEL_DOWNLOAD_URLS}" ]]; then
+        echo "ERROR: MODEL_AUTO_DOWNLOAD=true but MODEL_DOWNLOAD_URL / MODEL_DOWNLOAD_URLS not set." >&2
+        exit 1
+    fi
+
+    mkdir -p "$(dirname "${LLAMACPP_MODEL_PATH}")"
+    model_dir="$(dirname "${LLAMACPP_MODEL_PATH}")"
+
+    if [[ -n "${MODEL_DOWNLOAD_URLS}" ]]; then
+        IFS=',' read -r -a url_arr <<< "${MODEL_DOWNLOAD_URLS}"
+        missing="false"
+        for url in "${url_arr[@]}"; do
+            clean_url="$(echo "${url}" | xargs)"
+            [[ -z "${clean_url}" ]] && continue
+            filename="$(basename "${clean_url%%\?*}")"
+            target="${model_dir}/${filename}"
+            if [[ ! -f "${target}" ]]; then
+                missing="true"
+                break
             fi
+        done
+        if [[ "${missing}" != "true" ]]; then
+            echo "[INFO] Model shards already present in ${model_dir}, skip download."
+        fi
 
-            for url in "${URL_ARR[@]}"; do
-                clean_url="$(echo "${url}" | xargs)"
-                [[ -z "${clean_url}" ]] && continue
-
-                filename="$(basename "${clean_url%%\?*}")"
-                target_path="${MODEL_DIR}/${filename}"
-                tmp_path="${target_path}.part"
-
-                if [[ -f "${target_path}" ]]; then
-                    echo "[INFO] Shard exists, skip: ${filename}"
-                    continue
-                fi
-
-                echo "[INFO] Downloading shard: ${filename}"
-                if [[ -n "${MINIMAX25_DOWNLOAD_TOKEN}" ]]; then
-                    curl -L --fail --retry 5 --retry-delay 5 -C - \
-                      -H "Authorization: Bearer ${MINIMAX25_DOWNLOAD_TOKEN}" \
-                      -o "${tmp_path}" "${clean_url}"
-                else
-                    curl -L --fail --retry 5 --retry-delay 5 -C - \
-                      -o "${tmp_path}" "${clean_url}"
-                fi
-                mv -f "${tmp_path}" "${target_path}"
-            done
-            echo "[INFO] MiniMax2.5 GGUF shards downloaded to ${MODEL_DIR}"
+        for url in "${url_arr[@]}"; do
+            clean_url="$(echo "${url}" | xargs)"
+            [[ -z "${clean_url}" ]] && continue
+            filename="$(basename "${clean_url%%\?*}")"
+            target="${model_dir}/${filename}"
+            if [[ -f "${target}" ]]; then
+                echo "[INFO] Shard exists, skip: ${filename}"
+                continue
+            fi
+            echo "[INFO] Downloading shard: ${filename}"
+            download_to_file "${clean_url}" "${target}" "${MODEL_DOWNLOAD_TOKEN}"
+        done
+        echo "[INFO] Model shards prepared in ${model_dir}"
+    else
+        if [[ -f "${LLAMACPP_MODEL_PATH}" ]]; then
+            echo "[INFO] Model already present: ${LLAMACPP_MODEL_PATH}, skip download."
         else
-            if [[ -f "${LLAMACPP_MODEL_PATH}" ]]; then
-                echo "[INFO] MiniMax2.5 GGUF already present: ${LLAMACPP_MODEL_PATH}, skip download."
-            fi
-            TMP_PATH="${LLAMACPP_MODEL_PATH}.part"
-            if [[ ! -f "${LLAMACPP_MODEL_PATH}" ]]; then
-                echo "[INFO] MiniMax2.5 GGUF not found, downloading first-time model..."
-                if [[ -n "${MINIMAX25_DOWNLOAD_TOKEN}" ]]; then
-                    curl -L --fail --retry 5 --retry-delay 5 -C - \
-                      -H "Authorization: Bearer ${MINIMAX25_DOWNLOAD_TOKEN}" \
-                      -o "${TMP_PATH}" "${MINIMAX25_DOWNLOAD_URL}"
-                else
-                    curl -L --fail --retry 5 --retry-delay 5 -C - \
-                      -o "${TMP_PATH}" "${MINIMAX25_DOWNLOAD_URL}"
-                fi
-                mv -f "${TMP_PATH}" "${LLAMACPP_MODEL_PATH}"
-                echo "[INFO] MiniMax2.5 GGUF downloaded to ${LLAMACPP_MODEL_PATH}"
-            fi
+            echo "[INFO] Model not found, downloading: ${LLAMACPP_MODEL_PATH}"
+            download_to_file "${MODEL_DOWNLOAD_URL}" "${LLAMACPP_MODEL_PATH}" "${MODEL_DOWNLOAD_TOKEN}"
+            echo "[INFO] Model downloaded to ${LLAMACPP_MODEL_PATH}"
         fi
     fi
 fi
