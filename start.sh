@@ -213,6 +213,7 @@ AUTH_SECURE_COOKIES="${AUTH_SECURE_COOKIES:-false}"
 
 OPENCODE_HOST="${OPENCODE_HOST:-0.0.0.0}"
 OPENCODE_SERVER_PORT="${OPENCODE_SERVER_PORT:-5551}"
+OPENCODE_MANAGER_STARTUP_TIMEOUT_SEC="${OPENCODE_MANAGER_STARTUP_TIMEOUT_SEC:-300}"
 
 if [[ -z "${LLAMACPP_MODEL_PATH}" ]]; then
     echo "ERROR: No model selected." >&2
@@ -259,10 +260,39 @@ echo "[INFO] Starting OpenCode Manager on ${OPENCODE_MANAGER_HOST}:${OPENCODE_MA
 cd /opt/opencode-manager
 bun backend/src/index.ts &
 PID_MANAGER=$!
-until curl -fsS "http://127.0.0.1:${OPENCODE_MANAGER_PORT}/api/health" > /dev/null; do
-    echo "[INFO] Waiting for OpenCode Manager API to start..."
+
+ready=0
+start_ts="$(date +%s)"
+while true; do
+    # Newer manager builds may protect /api/health behind auth and return 401.
+    # Treat 200/401/403 as "HTTP stack is up".
+    http_code="$(curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:${OPENCODE_MANAGER_PORT}/api/health" || true)"
+    if [[ "${http_code}" == "200" || "${http_code}" == "401" || "${http_code}" == "403" ]]; then
+        ready=1
+        break
+    fi
+
+    # Fail fast if manager process already exited.
+    if ! kill -0 "${PID_MANAGER}" 2>/dev/null; then
+        echo "ERROR: OpenCode Manager process exited before becoming ready." >&2
+        exit 1
+    fi
+
+    now_ts="$(date +%s)"
+    elapsed=$((now_ts - start_ts))
+    if (( elapsed >= OPENCODE_MANAGER_STARTUP_TIMEOUT_SEC )); then
+        echo "ERROR: OpenCode Manager did not become ready within ${OPENCODE_MANAGER_STARTUP_TIMEOUT_SEC}s (last /api/health code: ${http_code})." >&2
+        exit 1
+    fi
+
+    echo "[INFO] Waiting for OpenCode Manager API to start... (last /api/health code: ${http_code:-n/a})"
     sleep 2
 done
+
+if [[ "${ready}" != "1" ]]; then
+    echo "ERROR: OpenCode Manager startup check ended unexpectedly." >&2
+    exit 1
+fi
 echo "[INFO] OpenCode Manager ready: http://127.0.0.1:${OPENCODE_MANAGER_PORT}"
 
 echo "[INFO] Starting llama-server on ${LLAMACPP_HOST}:${LLAMACPP_PORT}"
