@@ -25,6 +25,21 @@ RUN set -eux; \
       python3-pip \
       ripgrep \
       xz-utils \
+      net-tools \
+      iproute2 \
+      tcpdump \
+      btop \
+      wget \
+      traceroute \
+      dnsutils \
+      netcat-openbsd \
+      nmap \
+      mtr \
+      ethtool \
+      iputils-ping \
+      telnet \
+      ssh \
+      netplan.io \
       unzip; \
     curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" -o /tmp/node.tar.xz; \
     tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1; \
@@ -49,6 +64,15 @@ RUN set -eux; \
     mkdir -p /opt/opencode-manager/backend/node_modules/@opencode-manager /workspace/opencode-manager/data; \
     ln -sf /opt/opencode-manager/shared /opt/opencode-manager/backend/node_modules/@opencode-manager/shared; \
     rm -rf /var/lib/apt/lists/*
+# 安装 locale 并配置 UTF-8
+RUN apt-get update && \
+    apt-get install -y locales && \
+    locale-gen en_US.UTF-8 && \
+    update-locale LANG=en_US.UTF-8
+
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV LANGUAGE=en_US.UTF-8
 
 COPY --chmod=755 start.sh /start.sh
 
