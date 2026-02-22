@@ -23,7 +23,6 @@ RUN set -eux; \
       ca-certificates \
       curl \
       git \
-      iproute2 \
       jq \
       lsof \
       procps \
@@ -115,6 +114,6 @@ ENV DINGTALK_ALLOWED_USERS=${DINGTALK_ALLOWED_USERS:-*}
 COPY --chmod=755 start.sh /start.sh
 
 # llama.cpp + OpenCode Manager + OpenClaw + Mission Control
-EXPOSE 8080 5003 5551 3000 8081
+EXPOSE 8080 5003 5551 3000 18789
 
 ENTRYPOINT ["/start.sh"]
