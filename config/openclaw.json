@@ -15,7 +15,7 @@
         }]
       },
       "local": {
-        "baseUrl": "http://127.0.0.1:8080",
+        "baseUrl": "http://host.docker.internal:8080",  
         "api": "openai-completions",
         "models": [{
           "id": "llama-local",
@@ -31,12 +31,17 @@
   },
   "agents": {
     "defaults": {
+      "workspace": "~/.openclaw/workspace",   
       "model": { "primary": "minimax/minimax25" }
     }
   },
   "gateway": {
     "mode": "local",
     "port": 18789,
-    "host": "0.0.0.0"
+    "bind": "lan",  
+    "auth": {      
+      "mode": "password",  
+      "password": "your-password"  
+    }  
   }
 }
