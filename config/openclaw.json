@@ -1,0 +1,42 @@
+{
+  "models": {
+    "providers": {
+      "minimax": {
+        "baseUrl": "https://comfyui-nn-h200-136-71g-3.bytebroad.com",
+        "api": "openai-completions",
+        "models": [{
+          "id": "minimax25",
+          "name": "MiniMax 2.5",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+          "contextWindow": 128000,
+          "maxTokens": 8192
+        }]
+      },
+      "local": {
+        "baseUrl": "http://127.0.0.1:8080",
+        "api": "openai-completions",
+        "models": [{
+          "id": "llama-local",
+          "name": "Local LLaMA",
+          "reasoning": false,
+          "input": ["text"],
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+          "contextWindow": 65536,
+          "maxTokens": 8192
+        }]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": { "primary": "minimax/minimax25" }
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "port": 18789,
+    "host": "0.0.0.0"
+  }
+}

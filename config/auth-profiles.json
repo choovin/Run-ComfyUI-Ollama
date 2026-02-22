@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "profiles": {
+    "minimax": {
+      "type": "api_key",
+      "provider": "minimax",
+      "key": "no-key-required"
+    },
+    "local": {
+      "type": "api_key",
+      "provider": "minimax",
+      "key": "no-key-required"
+    }
+  }
+}

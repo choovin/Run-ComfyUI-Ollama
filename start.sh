@@ -1,13 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "[INFO] Starting services: llama.cpp + OpenCode Manager"
+echo "[INFO] Starting services: llama.cpp + OpenCode Manager + OpenClaw + Mission Control"
 
 # Ensure llama.cpp runtime shared libraries can be resolved.
 # Some upstream images place llama-server and its .so files under /app.
 export LD_LIBRARY_PATH="/app:/opt/llama/bin:/usr/local/lib:${LD_LIBRARY_PATH:-}"
-export PATH="/app:/opt/llama/bin:${PATH}"
+export PATH="/app:/opt/llama/bin:/usr/local/bin:/root/.bun/bin:${PATH}"
 
+# ==================== Configuration ====================
+# llama.cpp settings
 LLAMACPP_HOST="${LLAMACPP_HOST:-0.0.0.0}"
 LLAMACPP_PORT="${LLAMACPP_PORT:-8080}"
 LLAMACPP_MODEL_PATH="${LLAMACPP_MODEL_PATH:-}"
@@ -18,10 +20,38 @@ LLAMACPP_THREADS="${LLAMACPP_THREADS:-16}"
 LLAMACPP_PARALLEL="${LLAMACPP_PARALLEL:-1}"
 LLAMACPP_EXTRA_ARGS="${LLAMACPP_EXTRA_ARGS:-}"
 
+# OpenCode Manager settings
+OPENCODE_MANAGER_HOST="${OPENCODE_MANAGER_HOST:-0.0.0.0}"
+OPENCODE_MANAGER_PORT="${OPENCODE_MANAGER_PORT:-5003}"
+NODE_ENV="${NODE_ENV:-production}"
+WORKSPACE_PATH="${WORKSPACE_PATH:-/workspace}"
+DATABASE_PATH="${DATABASE_PATH:-/workspace/opencode-manager/data/opencode.db}"
+AUTH_TRUSTED_ORIGINS="${AUTH_TRUSTED_ORIGINS:-http://127.0.0.1:${OPENCODE_MANAGER_PORT},http://localhost:${OPENCODE_MANAGER_PORT}}"
+AUTH_SECURE_COOKIES="${AUTH_SECURE_COOKIES:-false}"
+
+# OpenCode settings
+OPENCODE_HOST="${OPENCODE_HOST:-0.0.0.0}"
+OPENCODE_SERVER_PORT="${OPENCODE_SERVER_PORT:-5551}"
+OPENCODE_MANAGER_STARTUP_TIMEOUT_SEC="${OPENCODE_MANAGER_STARTUP_TIMEOUT_SEC:-300}"
+
+# OpenClaw settings
+OPENCLAW_GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
+OPENCLAW_GATEWAY_HOST="${OPENCLAW_GATEWAY_HOST:-0.0.0.0}"
+#OPENCLAW_SERVER_PORT="${OPENCLAW_SERVER_PORT:-5551}"
+OPENCLAW_STARTUP_TIMEOUT_SEC="${OPENCLAW_STARTUP_TIMEOUT_SEC:-60}"
+
+# OpenClaw Mission Control settings
+OPENCLAW_MISSION_CONTROL_PORT="${OPENCLAW_MISSION_CONTROL_PORT:-3000}"
+OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC="${OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC:-60}"
+
+# DingTalk settings
+DINGTALK_CLIENT_ID="${DINGTALK_CLIENT_ID:-ding4iqz6zneluw2gyts}"
+DINGTALK_CLIENT_SECRET="${DINGTALK_CLIENT_SECRET:-0eUE-rEvcQC1-vyW5e4vxvQDovEH0SHByNGH0vsy1SGirfjwNWG-9VsiPV0mlBrz}"
+DINGTALK_ALLOWED_USERS="${DINGTALK_ALLOWED_USERS:-*}"
+
 # Model selection (GGUF) via preset + per-model path env vars.
-# If LLAMACPP_MODEL_PATH is set, it always wins.
-MODEL_PRESET="${MODEL_PRESET:-${LLAMACPP_MODEL_PRESET:-glm47flash}}"
-GPU_PROFILE="${GPU_PROFILE:-${LLAMACPP_GPU_PROFILE:-71g}}" # "71g" or "35g" (used only for defaults)
+MODEL_PRESET="${MODEL_PRESET:-${LLAMACPP_MODEL_PRESET:-minimax25}}"
+GPU_PROFILE="${GPU_PROFILE:-${LLAMACPP_GPU_PROFILE:-71g}}"
 MODEL_PATH_GLM5="${MODEL_PATH_GLM5:-}"
 MODEL_PATH_GLM47FLASH="${MODEL_PATH_GLM47FLASH:-}"
 MODEL_PATH_MINIMAX25="${MODEL_PATH_MINIMAX25:-}"
@@ -44,6 +74,7 @@ AUTO_DOWNLOAD_MINIMAX25="${AUTO_DOWNLOAD_MINIMAX25:-false}"
 MINIMAX25_DOWNLOAD_URL="${MINIMAX25_DOWNLOAD_URL:-}"
 MINIMAX25_DOWNLOAD_URLS="${MINIMAX25_DOWNLOAD_URLS:-}"
 MINIMAX25_DOWNLOAD_TOKEN="${MINIMAX25_DOWNLOAD_TOKEN:-${HF_TOKEN:-}}"
+# ==================== Model Configuration ====================
 
 if [[ -z "${LLAMACPP_CTX_SIZE}" ]]; then
     case "${GPU_PROFILE}" in
@@ -203,17 +234,7 @@ if [[ "${MODEL_AUTO_DOWNLOAD}" == "true" ]]; then
     fi
 fi
 
-OPENCODE_MANAGER_HOST="${OPENCODE_MANAGER_HOST:-0.0.0.0}"
-OPENCODE_MANAGER_PORT="${OPENCODE_MANAGER_PORT:-5003}"
-NODE_ENV="${NODE_ENV:-production}"
-WORKSPACE_PATH="${WORKSPACE_PATH:-/workspace}"
-DATABASE_PATH="${DATABASE_PATH:-/workspace/opencode-manager/data/opencode.db}"
-AUTH_TRUSTED_ORIGINS="${AUTH_TRUSTED_ORIGINS:-http://127.0.0.1:${OPENCODE_MANAGER_PORT},http://localhost:${OPENCODE_MANAGER_PORT}}"
-AUTH_SECURE_COOKIES="${AUTH_SECURE_COOKIES:-false}"
-
-OPENCODE_HOST="${OPENCODE_HOST:-0.0.0.0}"
-OPENCODE_SERVER_PORT="${OPENCODE_SERVER_PORT:-5551}"
-OPENCODE_MANAGER_STARTUP_TIMEOUT_SEC="${OPENCODE_MANAGER_STARTUP_TIMEOUT_SEC:-300}"
+# ==================== Validation ====================
 
 if [[ -z "${LLAMACPP_MODEL_PATH}" ]]; then
     echo "ERROR: No model selected." >&2
@@ -236,6 +257,99 @@ if [[ -z "${AUTH_SECRET:-}" ]]; then
     echo "[INFO] AUTH_SECRET not set, generated an ephemeral secret."
 fi
 
+# ==================== Setup OpenClaw Config ====================
+
+echo "[INFO] Setting up OpenClaw configuration..."
+mkdir -p /root/.openclaw/agents/main/agent
+
+# Update OpenClaw config with environment variables
+cat > /root/.openclaw/openclaw.json << EOF
+{
+  "models": {
+    "providers": {
+      "minimax": {
+        "baseUrl": "https://comfyui-nn-h200-136-71g-3.bytebroad.com",
+        "api": "openai-completions",
+        "models": [{
+          "id": "minimax25",
+          "name": "MiniMax 2.5",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+          "contextWindow": 128000,
+          "maxTokens": 8192
+        }]
+      },
+      "local": {
+        "baseUrl": "http://127.0.0.1:${LLAMACPP_PORT}",
+        "api": "openai-completions",
+        "models": [{
+          "id": "llama-local",
+          "name": "Local LLaMA",
+          "reasoning": false,
+          "input": ["text"],
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+          "contextWindow": ${LLAMACPP_CTX_SIZE},
+          "maxTokens": 8192
+        }]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": { "primary": "minimax/minimax25" }
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "port": ${OPENCLAW_GATEWAY_PORT},
+    "host": "${OPENCLAW_GATEWAY_HOST}"
+  },
+  "dingtalk": {
+    "clientId": "${DINGTALK_CLIENT_ID}",
+    "clientSecret": "${DINGTALK_CLIENT_SECRET}",
+    "allowedUsers": "${DINGTALK_ALLOWED_USERS}"
+  }
+}
+EOF
+
+cat > /root/.openclaw/agents/main/agent/auth-profiles.json << EOF
+{
+  "version": 1,
+  "profiles": {
+    "minimax": {
+      "type": "api_key",
+      "provider": "minimax",
+      "key": "no-key-required"
+    },
+    "local": {
+      "type": "api_key",
+      "provider": "local",
+      "key": "no-key-required"
+    }
+  }
+}
+EOF
+
+chmod -R 755 /root/.openclaw
+
+# ==================== Cleanup Function ====================
+
+cleanup() {
+    local code=$?
+    echo "[INFO] Cleaning up services..."
+    if [[ -n "${PID_MISSION_CONTROL:-}" ]]; then kill "${PID_MISSION_CONTROL}" 2>/dev/null || true; fi
+    if [[ -n "${PID_OPENCLAW_GATEWAY:-}" ]]; then kill "${PID_OPENCLAW_GATEWAY}" 2>/dev/null || true; fi
+    if [[ -n "${PID_MANAGER:-}" ]]; then kill "${PID_MANAGER}" 2>/dev/null || true; fi
+    if [[ -n "${PID_LLAMA:-}" ]]; then kill "${PID_LLAMA}" 2>/dev/null || true; fi
+    wait || true
+    exit "${code}"
+}
+trap cleanup EXIT INT TERM
+
+# ==================== Start Services ====================
+
+# Export environment variables for OpenCode Manager
 export HOST="${OPENCODE_MANAGER_HOST}"
 export PORT="${OPENCODE_MANAGER_PORT}"
 export NODE_ENV
@@ -247,20 +361,13 @@ export OPENCODE_HOST
 export OPENCODE_SERVER_PORT
 mkdir -p "$(dirname "${DATABASE_PATH}")"
 
-cleanup() {
-    local code=$?
-    if [[ -n "${PID_MANAGER:-}" ]]; then kill "${PID_MANAGER}" 2>/dev/null || true; fi
-    if [[ -n "${PID_LLAMA:-}" ]]; then kill "${PID_LLAMA}" 2>/dev/null || true; fi
-    wait || true
-    exit "${code}"
-}
-trap cleanup EXIT INT TERM
-
+# Start OpenCode Manager
 echo "[INFO] Starting OpenCode Manager on ${OPENCODE_MANAGER_HOST}:${OPENCODE_MANAGER_PORT}"
 cd /opt/opencode-manager
 bun backend/src/index.ts &
 PID_MANAGER=$!
 
+# Wait for OpenCode Manager to be ready
 ready=0
 start_ts="$(date +%s)"
 while true; do
@@ -295,6 +402,85 @@ if [[ "${ready}" != "1" ]]; then
 fi
 echo "[INFO] OpenCode Manager ready: http://127.0.0.1:${OPENCODE_MANAGER_PORT}"
 
+# Start OpenClaw Gateway  
+echo "[INFO] Starting OpenClaw Gateway on port ${OPENCLAW_GATEWAY_PORT}"  
+openclaw gateway --port "${OPENCLAW_GATEWAY_PORT}" --bind lan --auth password --password "${OPENCLAW_GATEWAY_PASSWORD}" &  
+PID_OPENCLAW_GATEWAY=$!  
+  
+# Wait for Gateway to be ready  
+openclaw_ready=0  
+start_ts="$(date +%s)"  
+while true; do  
+    if openclaw gateway health --url "ws://127.0.0.1:${OPENCLAW_GATEWAY_PORT}" >/dev/null 2>&1; then  
+        openclaw_ready=1  
+        break  
+    fi  
+      
+    if ! kill -0 "${PID_OPENCLAW_GATEWAY}" 2>/dev/null; then  
+        echo "ERROR: OpenClaw Gateway process exited before becoming ready." >&2  
+        exit 1  
+    fi  
+      
+    now_ts="$(date +%s)"  
+    elapsed=$((now_ts - start_ts))  
+    if (( elapsed >= OPENCLAW_STARTUP_TIMEOUT_SEC )); then  
+        echo "ERROR: OpenClaw Gateway did not become ready within ${OPENCLAW_STARTUP_TIMEOUT_SEC}s." >&2  
+        exit 1  
+    fi  
+      
+    echo "[INFO] Waiting for OpenClaw Gateway to start..."  
+    sleep 2  
+done  
+echo "[INFO] OpenClaw Gateway ready: ws://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
+
+# Start OpenClaw Mission Control
+echo "[INFO] Starting OpenClaw Mission Control on port ${OPENCLAW_MISSION_CONTROL_PORT}"
+cd /opt/openclaw-mission-control
+if [ -f "package.json" ] && grep -q '"start"' package.json; then
+    pnpm start &
+    PID_MISSION_CONTROL=$!
+elif [ -f "dist/index.js" ]; then
+    node dist/index.js &
+    PID_MISSION_CONTROL=$!
+elif [ -f "index.js" ]; then
+    node index.js &
+    PID_MISSION_CONTROL=$!
+else
+    echo "[WARN] OpenClaw Mission Control start script not found, skipping..."
+    PID_MISSION_CONTROL=""
+fi
+
+# Wait for Mission Control to be ready (if started)
+if [[ -n "${PID_MISSION_CONTROL}" ]]; then
+    mc_ready=0
+    start_ts="$(date +%s)"
+    while true; do
+        if curl -sS "http://127.0.0.1:${OPENCLAW_MISSION_CONTROL_PORT}/health" >/dev/null 2>&1; then
+            mc_ready=1
+            break
+        fi
+
+        if ! kill -0 "${PID_MISSION_CONTROL}" 2>/dev/null; then
+            echo "WARN: OpenClaw Mission Control process exited before becoming ready." >&2
+            break
+        fi
+
+        now_ts="$(date +%s)"
+        elapsed=$((now_ts - start_ts))
+        if (( elapsed >= OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC )); then
+            echo "WARN: OpenClaw Mission Control did not become ready within ${OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC}s." >&2
+            break
+        fi
+
+        echo "[INFO] Waiting for OpenClaw Mission Control to start..."
+        sleep 2
+    done
+    if [[ "${mc_ready}" == "1" ]]; then
+        echo "[INFO] OpenClaw Mission Control ready: http://127.0.0.1:${OPENCLAW_MISSION_CONTROL_PORT}"
+    fi
+fi
+
+# Start llama-server
 echo "[INFO] Starting llama-server on ${LLAMACPP_HOST}:${LLAMACPP_PORT}"
 LLAMACPP_BIN="${LLAMACPP_BIN:-}"
 if [[ -z "${LLAMACPP_BIN}" ]]; then
@@ -329,4 +515,17 @@ fi
 "${CMD[@]}" &
 PID_LLAMA=$!
 
-wait -n "${PID_MANAGER}" "${PID_LLAMA}"
+echo "[INFO] =========================================="
+echo "[INFO] All services started successfully!"
+echo "[INFO] =========================================="
+echo "[INFO] llama.cpp Server:     http://127.0.0.1:${LLAMACPP_PORT}"
+echo "[INFO] OpenCode Manager:     http://127.0.0.1:${OPENCODE_MANAGER_PORT}"
+echo "[INFO] Opencode Server:      http://127.0.0.1:${OPENCODE_SERVER_PORT}"
+echo "[INFO] OpenClaw Gateway:     http://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
+if [[ -n "${PID_MISSION_CONTROL}" ]] && kill -0 "${PID_MISSION_CONTROL}" 2>/dev/null; then
+    echo "[INFO] Mission Control:      http://127.0.0.1:${OPENCLAW_MISSION_CONTROL_PORT}"
+fi
+echo "[INFO] =========================================="
+
+# Wait for any process to exit
+wait -n "${PID_MANAGER}" "${PID_LLAMA}" "${PID_OPENCLAW_GATEWAY}" "${PID_MISSION_CONTROL:-}"
