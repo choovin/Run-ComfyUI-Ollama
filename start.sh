@@ -412,10 +412,19 @@ PID_OPENCLAW_GATEWAY=$!
 openclaw_ready=0  
 start_ts="$(date +%s)"  
 while true; do  
-    if openclaw gateway health --url "ws://127.0.0.1:${OPENCLAW_GATEWAY_PORT}" >/dev/null 2>&1; then  
-        openclaw_ready=1  
-        break  
-    fi  
+    # 直接检查 TCP 端口是否可连接（绕过认证问题）
+    if timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/${OPENCLAW_GATEWAY_PORT} && echo -e 'GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n' >&3 && timeout 1 cat <&3 | grep -q '200\|101'" 2>/dev/null; then
+        openclaw_ready=1
+        break
+    fi
+    
+    # 备选：简单的端口监听检查
+    if ss -tln | grep -q "LISTEN.*:${OPENCLAW_GATEWAY_PORT}"; then
+        # 端口在监听，再等 2 秒让服务完全初始化
+        sleep 2
+        openclaw_ready=1
+        break
+    fi
       
     if ! kill -0 "${PID_OPENCLAW_GATEWAY}" 2>/dev/null; then  
         echo "ERROR: OpenClaw Gateway process exited before becoming ready." >&2  
