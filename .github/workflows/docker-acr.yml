@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - "v*"
+    branches:
+      - "main"
+      - "master"
   workflow_dispatch:
     inputs:
       image_version:
@@ -21,6 +24,9 @@ on:
         required: false
         type: boolean
         default: false
+      custom_tags:
+        description: "Comma-separated custom tags to apply (optional)"
+        required: false
 
 env:
   REGISTRY: registry.cn-shenzhen.aliyuncs.com
@@ -47,8 +53,21 @@ jobs:
           sudo rm -rf /opt/ghc || true
           sudo rm -rf /usr/local/lib/android || true
           sudo rm -rf /opt/hostedtoolcache || true
-          docker system prune -af || true
+          sudo rm -rf /usr/share/ghc || true
+          sudo rm -rf /opt/conda || true
+          docker system prune -af --volumes || true
           df -h
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
 
       - name: Resolve image version
         id: version
@@ -112,8 +131,20 @@ jobs:
             OPENCODE_MANAGER_REF=${{ steps.component_versions.outputs.opencode_manager_ref }}
           tags: |
             ${{ env.MAIN_IMAGE }}:${{ steps.component_versions.outputs.full_tag }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          pull: true
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Move cache
+        shell: bash
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.MAIN_IMAGE }}:${{ steps.component_versions.outputs.full_tag }}
 
       - name: Tag and push latest
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.push_latest == 'true'
