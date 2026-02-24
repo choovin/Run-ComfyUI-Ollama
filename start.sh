@@ -306,6 +306,7 @@ cat > /root/.openclaw/openclaw.json << EOF
   },
   "gateway": {
     "port": ${OPENCLAW_GATEWAY_PORT},
+    "mode": "local",
     "bind": "lan",
     "auth": {
       "mode": "password",
@@ -404,9 +405,9 @@ if [[ "${ready}" != "1" ]]; then
 fi
 echo "[INFO] OpenCode Manager ready: http://127.0.0.1:${OPENCODE_MANAGER_PORT}"
 
-# Start OpenClaw Gateway  
-echo "[INFO] Starting OpenClaw Gateway on port ${OPENCLAW_GATEWAY_PORT}"  
-openclaw gateway --port "${OPENCLAW_GATEWAY_PORT}" --bind lan --auth password --password "${OPENCLAW_GATEWAY_PASSWORD}" &  
+# Start OpenClaw Gateway
+echo "[INFO] Starting OpenClaw Gateway on port ${OPENCLAW_GATEWAY_PORT}"
+openclaw gateway --mode local --port "${OPENCLAW_GATEWAY_PORT}" --bind lan --auth password --password "${OPENCLAW_GATEWAY_PASSWORD}" &
 PID_OPENCLAW_GATEWAY=$!  
   
 # Wait for Gateway to be ready  
