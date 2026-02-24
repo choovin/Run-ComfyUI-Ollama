@@ -1,139 +1,123 @@
-version: "3.9"
+# llama.cpp + OpenCode Manager + OpenClaw + Mission Control 部署配置
+# 基于 Jenkins Pipeline: pipeline-llamacpp-opencode-h200-mig71g.groovy
+# 服务端口:
+#   - llama.cpp: 8080
+#   - OpenCode Manager: 5003
+#   - OpenCode Server: 5551
+#   - OpenClaw Gateway: 18789
+#   - Mission Control: 3000
 
 services:
-  run-comfyui-ollama:
-    image: registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-run-comfyui-ollama:${IMAGE_TAG:-latest}
-    container_name: run-comfyui-ollama
+  runnode-llamacpp-opencode:
+    image: ${REGISTRY_SOURCE:-registry.cn-shenzhen.aliyuncs.com}/${IMAGE_REPO_MAIN:-sailfish/runnode-llamacpp-glm47-opencode}:${IMAGE_TAG_MAIN:-latest}
+    container_name: runnode-llamacpp-opencode
     restart: unless-stopped
-
-    # Requires NVIDIA Container Toolkit on the host
-    gpus: all
-
-    ports:
-      - "${COMFYUI_PORT:-8188}:8188"
-      - "${CODE_SERVER_PORT:-9000}:9000"
-      - "${GRADIO_PORT:-7860}:7860"
-      - "${OLLAMA_PORT:-11434}:11434"
-      - "${OPENCODE_PORT:-4096}:4096"
-      - "${OPENCODE_MANAGER_PORT:-5003}:5003"
-      - "${SSH_PORT:-2222}:22"
-
-    volumes:
-      - ./workspace:/workspace
-      - ollama_data:/root/.ollama
-
-    environment:
-      # Authentication / access
-      PASSWORD: ${PASSWORD:-}
-      PUBLIC_KEY: ${PUBLIC_KEY:-}
-      HF_TOKEN: ${HF_TOKEN:-}
-
-      # ComfyUI runtime args
-      COMFYUI_EXTRA_ARGUMENTS: ${COMFYUI_EXTRA_ARGUMENTS:---listen}
-
-      # Optional preset for GLM-5 GGUF
-      DEPLOY_GLM5_UD_IQ2_XXS: ${DEPLOY_GLM5_UD_IQ2_XXS:-false}
-      DEPLOY_GLM47_FLASH_GGUF: ${DEPLOY_GLM47_FLASH_GGUF:-false}
-
-      # OpenCode server
-      OPENCODE_HOSTNAME: ${OPENCODE_HOSTNAME:-0.0.0.0}
-      OPENCODE_PORT: ${OPENCODE_PORT:-4096}
-
-      # OpenCode Manager backend
-      HOST: ${OPENCODE_MANAGER_HOST:-0.0.0.0}
-      PORT: ${OPENCODE_MANAGER_PORT:-5003}
-      WORKSPACE_PATH: ${WORKSPACE_PATH:-/workspace}
-      DATABASE_PATH: ${DATABASE_PATH:-/workspace/opencode-manager/data/opencode.db}
-      AUTH_SECRET: ${AUTH_SECRET:-}
-      AUTH_TRUSTED_ORIGINS: ${AUTH_TRUSTED_ORIGINS:-http://127.0.0.1:5003,http://localhost:5003}
-      AUTH_SECURE_COOKIES: ${AUTH_SECURE_COOKIES:-false}
-
-      # Ollama runtime tuning (recommended for very large GGUF models)
-      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
-      OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
-      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-8192}
-      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
-
-      # Optional model auto-pull list (startup)
-      OLLAMA_MODEL1: ${OLLAMA_MODEL1:-}
-      OLLAMA_MODEL2: ${OLLAMA_MODEL2:-}
-      OLLAMA_MODEL3: ${OLLAMA_MODEL3:-}
-      OLLAMA_MODEL4: ${OLLAMA_MODEL4:-}
-      OLLAMA_MODEL5: ${OLLAMA_MODEL5:-}
-      OLLAMA_MODEL6: ${OLLAMA_MODEL6:-}
-
-  llama-cpp-glm5:
-    profiles: ["glm5-sidecar"]
-    image: ${LLAMACPP_SIDECAR_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}
-    container_name: llama-cpp-glm5
-    restart: unless-stopped
-    gpus: all
-    ports:
-      - "${LLAMACPP_GLM5_PORT:-18080}:8080"
-    volumes:
-      - ollama_data:/root/.ollama:ro
-    command:
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8080"
-      - --model
-      - ${LLAMACPP_GLM5_MODEL_PATH:-/root/.ollama/models/blobs/sha256-0c5372e168853083392239349e76fb8a09c60e86150d0d4ebe4b0a0ba5f0882a}
-      - --alias
-      - ${LLAMACPP_GLM5_ALIAS:-glm5}
-      - --ctx-size
-      - "${LLAMACPP_GLM5_CTX_SIZE:-8192}"
-      - --n-gpu-layers
-      - "${LLAMACPP_GLM5_N_GPU_LAYERS:-999}"
-      - --threads
-      - "${LLAMACPP_GLM5_THREADS:-16}"
-      - --parallel
-      - "${LLAMACPP_GLM5_PARALLEL:-1}"
-      - --jinja
-    healthcheck:
-      test: ["CMD", "bash", "-lc", "curl -sf http://127.0.0.1:8080/health > /dev/null"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  llama-cpp-glm5-localbuild:
-    profiles: ["glm5-sidecar-localbuild"]
     build:
       context: .
-      dockerfile: sidecar/llamacpp-glm5/Dockerfile
-      args:
-        LLAMACPP_REF: ${LLAMACPP_REF:-master}
-    image: runnode/llamacpp-glm5:master-latest
-    container_name: llama-cpp-glm5-localbuild
-    restart: unless-stopped
-    gpus: all
+      dockerfile: Dockerfile
+    # Requires NVIDIA Container Toolkit on the host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
     ports:
-      - "${LLAMACPP_GLM5_PORT:-18080}:8080"
+      # llama.cpp
+      - "${PORT_LLAMA:-8080}:8080"
+      # OpenCode Manager
+      - "${PORT_OPENCODE_MGR:-5003}:5003"
+      # OpenCode Server
+      - "${PORT_OPENCODE:-5551}:5551"
+      # OpenClaw Gateway
+      - "${PORT_OPENCLAW_GATEWAY:-18789}:18789"
+      # Mission Control
+      - "${PORT_OPENCLAW_MC:-3000}:3000"
+
     volumes:
-      - ollama_data:/root/.ollama:ro
-    command:
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8080"
-      - --model
-      - ${LLAMACPP_GLM5_MODEL_PATH:-/root/.ollama/models/blobs/sha256-0c5372e168853083392239349e76fb8a09c60e86150d0d4ebe4b0a0ba5f0882a}
-      - --alias
-      - ${LLAMACPP_GLM5_ALIAS:-glm5}
-      - --ctx-size
-      - "${LLAMACPP_GLM5_CTX_SIZE:-8192}"
-      - --n-gpu-layers
-      - "${LLAMACPP_GLM5_N_GPU_LAYERS:-999}"
-      - --threads
-      - "${LLAMACPP_GLM5_THREADS:-16}"
-      - --parallel
-      - "${LLAMACPP_GLM5_PARALLEL:-1}"
-      - --jinja
+      # 模型挂载
+      - ${MODEL_MOUNT_PATH:-/data/sailfish/vllm-ollama/ollama_data/models}:/models
+      # Workspace 挂载
+      - ${WORKSPACE_MOUNT_PATH:-/data/sailfish/vllm-ollama/workspace}/${HELM_RELEASE_NAME:-runnode}:/workspace
+      # OpenClaw 配置挂载（注释掉，让 start.sh 生成配置）
+      # - ${OPENCLAW_MOUNT_PATH:-/data/sailfish/vllm-ollama/openclaw-config}/${HELM_RELEASE_NAME:-runnode}:/root/.openclaw
+
+    environment:
+      # ========== 基础环境 ==========
+      TZ: ${TZ:-Asia/Shanghai}
+      NODE_ENV: ${NODE_ENV:-production}
+
+      # ========== 代理配置 ==========
+      http_proxy: ${HTTP_PROXY_URL:-}
+      https_proxy: ${HTTP_PROXY_URL:-}
+      HTTP_PROXY: ${HTTP_PROXY_URL:-}
+      HTTPS_PROXY: ${HTTP_PROXY_URL:-}
+      no_proxy: ${NO_PROXY_LIST:-bytepiping-storage.bytebroad.com,bytepiping-storage.bytebroad.com.cn,localhost,127.0.0.1,::1,.svc,.svc.cluster.local,169.254.169.254}
+      NO_PROXY: ${NO_PROXY_LIST:-bytepiping-storage.bytebroad.com,bytepiping-storage.bytebroad.com.cn,localhost,127.0.0.1,::1,.svc,.svc.cluster.local,169.254.169.254}
+
+      # ========== 模型选择 ==========
+      # 支持：glm5 / glm47flash / minimax25 / kimi25
+      MODEL_PRESET: ${MODEL_PRESET:-glm47flash}
+      GPU_PROFILE: ${GPU_PROFILE:-35g}
+
+      # 模型路径（根据 MODEL_PRESET 选择对应的路径）
+      MODEL_PATH_GLM5: ${MODEL_PATH_GLM5:-}
+      MODEL_PATH_GLM47FLASH: ${MODEL_PATH_GLM47FLASH:-/models/downloads/glm47flash/GLM-4.7-Flash-Q4_K_M.gguf}
+      MODEL_PATH_MINIMAX25: ${MODEL_PATH_MINIMAX25:-}
+      MODEL_PATH_KIMI25: ${MODEL_PATH_KIMI25:-}
+
+      # ========== 模型自动下载 ==========
+      MODEL_AUTO_DOWNLOAD: ${MODEL_AUTO_DOWNLOAD:-true}
+      AUTO_DOWNLOAD_GLM47FLASH: ${AUTO_DOWNLOAD_GLM47FLASH:-true}
+      MODEL_DOWNLOAD_URL: ${MODEL_DOWNLOAD_URL:-https://modelscope.cn/models/unsloth/GLM-4.7-Flash-GGUF/resolve/master/GLM-4.7-Flash-UD-TQ1_0.gguf}
+      MODEL_DOWNLOAD_URLS: ${MODEL_DOWNLOAD_URLS:-}
+      MODEL_DOWNLOAD_TOKEN: ${MODEL_DOWNLOAD_TOKEN:-}
+      HF_TOKEN: ${HF_TOKEN:-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}
+      GLM47FLASH_DOWNLOAD_URL: ${GLM47FLASH_DOWNLOAD_URL:-}
+      GLM47FLASH_DOWNLOAD_TOKEN: ${GLM47FLASH_DOWNLOAD_TOKEN:-}
+
+      # ========== llama.cpp 参数 ==========
+      LLAMACPP_HOST: ${LLAMACPP_HOST:-0.0.0.0}
+      LLAMACPP_PORT: ${LLAMACPP_PORT:-8080}
+      LLAMACPP_CTX_SIZE: ${LLAMACPP_CTX_SIZE:-8192}
+      LLAMACPP_N_GPU_LAYERS: ${LLAMACPP_N_GPU_LAYERS:-35}
+      LLAMACPP_THREADS: ${LLAMACPP_THREADS:-8}
+      LLAMACPP_PARALLEL: ${LLAMACPP_PARALLEL:-1}
+      LLAMACPP_EXTRA_ARGS: ${LLAMACPP_EXTRA_ARGS:---cache-type-k q8_0 --cache-type-v q8_0}
+
+      # ========== OpenCode Manager 参数 ==========
+      OPENCODE_HOST: ${OPENCODE_HOST:-127.0.0.1}
+      OPENCODE_SERVER_PORT: ${OPENCODE_SERVER_PORT:-5551}
+      OPENCODE_MANAGER_HOST: ${OPENCODE_MANAGER_HOST:-0.0.0.0}
+      OPENCODE_MANAGER_PORT: ${OPENCODE_MANAGER_PORT:-5003}
+      WORKSPACE_PATH: ${WORKSPACE_PATH:-/workspace}
+      DATABASE_PATH: ${DATABASE_PATH:-/workspace/opencode-manager/data/opencode.db}
+      AUTH_SECRET: ${AUTH_SECRET:-h7ZD0gcRspozjf7sSLeeyEtupKn8lD8MxJayV2Pf754=}
+      AUTH_TRUSTED_ORIGINS: ${AUTH_TRUSTED_ORIGINS:-http://0.0.0.0:5003}
+      AUTH_SECURE_COOKIES: ${AUTH_SECURE_COOKIES:-false}
+
+      # OpenCode Manager: 健康检查和安装超时
+      OPENCODE_HEALTH_TIMEOUT_MS: ${OPENCODE_HEALTH_TIMEOUT_MS:-120000}
+      OPENCODE_UPGRADE_TIMEOUT_MS: ${OPENCODE_UPGRADE_TIMEOUT_MS:-600000}
+
+      # ========== OpenClaw 参数 ==========
+      OPENCLAW_GATEWAY_PORT: ${OPENCLAW_GATEWAY_PORT:-18789}
+      OPENCLAW_GATEWAY_HOST: ${OPENCLAW_GATEWAY_HOST:-0.0.0.0}
+      OPENCLAW_GATEWAY_PASSWORD: ${OPENCLAW_GATEWAY_PASSWORD:-sailfish020}
+      OPENCLAW_MISSION_CONTROL_PORT: ${OPENCLAW_MISSION_CONTROL_PORT:-3000}
+      OPENCLAW_STARTUP_TIMEOUT_SEC: ${OPENCLAW_STARTUP_TIMEOUT_SEC:-60}
+      OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC: ${OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC:-60}
+
+      # ========== 钉钉配置 ==========
+      DINGTALK_CLIENT_ID: ${DINGTALK_CLIENT_ID:-ding4iqz6zneluw2gyts}
+      DINGTALK_CLIENT_SECRET: ${DINGTALK_CLIENT_SECRET:-0eUE-rEvcQC1-vyW5e4vxvQDovEH0SHByNGH0vsy1SGirfjwNWG-9VsiPV0mlBrz}
+      DINGTALK_ALLOWED_USERS: ${DINGTALK_ALLOWED_USERS:-*}
+
     healthcheck:
-      test: ["CMD", "bash", "-lc", "curl -sf http://127.0.0.1:8080/health > /dev/null"]
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 5
-
-volumes:
-  ollama_data:
+      start_period: 120s

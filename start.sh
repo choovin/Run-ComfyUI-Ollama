@@ -260,77 +260,78 @@ fi
 # ==================== Setup OpenClaw Config ====================
 
 echo "[INFO] Setting up OpenClaw configuration..."
-mkdir -p /root/.openclaw/agents/main/agent
-more /root/.openclaw/openclaw.json
-# Update OpenClaw config with environment variables
-# cat > /root/.openclaw/openclaw.json << EOF
-# {
-#   "models": {
-#     "providers": {
-#       "minimax": {
-#         "baseUrl": "https://comfyui-nn-h200-136-71g-3.bytebroad.com",
-#         "api": "openai-completions",
-#         "models": [{
-#           "id": "minimax25",
-#           "name": "MiniMax 2.5",
-#           "reasoning": true,
-#           "input": ["text", "image"],
-#           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
-#           "contextWindow": 128000,
-#           "maxTokens": 8192
-#         }]
-#       },
-#       "local": {
-#         "baseUrl": "http://127.0.0.1:${LLAMACPP_PORT}",
-#         "api": "openai-completions",
-#         "models": [{
-#           "id": "llama-local",
-#           "name": "Local LLaMA",
-#           "reasoning": false,
-#           "input": ["text"],
-#           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
-#           "contextWindow": ${LLAMACPP_CTX_SIZE},
-#           "maxTokens": 8192
-#         }]
-#       }
-#     }
-#   },
-#   "agents": {
-#     "defaults": {
-#       "model": { "primary": "minimax/minimax25" }
-#     }
-#   },
-#   "gateway": {
-#     "mode": "local",
-#     "port": ${OPENCLAW_GATEWAY_PORT},
-#     "host": "${OPENCLAW_GATEWAY_HOST}"
-#   },
-#   "dingtalk": {
-#     "clientId": "${DINGTALK_CLIENT_ID}",
-#     "clientSecret": "${DINGTALK_CLIENT_SECRET}",
-#     "allowedUsers": "${DINGTALK_ALLOWED_USERS}"
-#   }
-# }
-# EOF
 
-more /root/.openclaw/agents/main/agent/auth-profiles.json
-# cat > /root/.openclaw/agents/main/agent/auth-profiles.json << EOF
-# {
-#   "version": 1,
-#   "profiles": {
-#     "minimax": {
-#       "type": "api_key",
-#       "provider": "minimax",
-#       "key": "no-key-required"
-#     },
-#     "local": {
-#       "type": "api_key",
-#       "provider": "local",
-#       "key": "no-key-required"
-#     }
-#   }
-# }
-# EOF
+# Force remove existing config to avoid stale data
+rm -rf /root/.openclaw/* 2>/dev/null || true
+
+mkdir -p /root/.openclaw/agents/main/agent
+
+# Update OpenClaw config with environment variables
+cat > /root/.openclaw/openclaw.json << EOF
+{
+  "models": {
+    "providers": {
+      "minimax": {
+        "baseUrl": "https://comfyui-nn-h200-136-71g-3.bytebroad.com",
+        "api": "openai-completions",
+        "models": [{
+          "id": "minimax25",
+          "name": "MiniMax 2.5",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+          "contextWindow": 128000,
+          "maxTokens": 8192
+        }]
+      },
+      "local": {
+        "baseUrl": "http://127.0.0.1:${LLAMACPP_PORT}",
+        "api": "openai-completions",
+        "models": [{
+          "id": "llama-local",
+          "name": "Local LLaMA",
+          "reasoning": false,
+          "input": ["text"],
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+          "contextWindow": ${LLAMACPP_CTX_SIZE},
+          "maxTokens": 8192
+        }]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": { "primary": "minimax/minimax25" }
+    }
+  },
+  "gateway": {
+    "port": ${OPENCLAW_GATEWAY_PORT},
+    "bind": "lan",
+    "auth": {
+      "mode": "password",
+      "password": "${OPENCLAW_GATEWAY_PASSWORD:-your-password}"
+    }
+  }
+}
+EOF
+
+cat > /root/.openclaw/agents/main/agent/auth-profiles.json << EOF
+{
+  "version": 1,
+  "profiles": {
+    "minimax": {
+      "type": "api_key",
+      "provider": "minimax",
+      "key": "no-key-required"
+    },
+    "local": {
+      "type": "api_key",
+      "provider": "local",
+      "key": "no-key-required"
+    }
+  }
+}
+EOF
 
 chmod -R 755 /root/.openclaw
 
