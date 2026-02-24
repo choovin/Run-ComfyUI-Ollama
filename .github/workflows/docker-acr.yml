@@ -142,10 +142,6 @@ jobs:
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
-      - name: Inspect image
-        run: |
-          docker buildx imagetools inspect ${{ env.MAIN_IMAGE }}:${{ steps.component_versions.outputs.full_tag }}
-
       - name: Tag and push latest
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.push_latest == 'true'
         shell: bash
