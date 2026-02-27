@@ -420,6 +420,8 @@ echo "[INFO] OpenCode Manager ready: http://127.0.0.1:${OPENCODE_MANAGER_PORT}"
 
 # Start OpenClaw Gateway
 echo "[INFO] Starting OpenClaw Gateway on port ${OPENCLAW_GATEWAY_PORT}"
+# Add control UI configuration for non-loopback binding
+export OPENCLAW_CONTROL_UI_DANGEROUSLY_ALLOW_HOST_HEADER_ORIGIN_FALLBACK="true"
 openclaw gateway run --port "${OPENCLAW_GATEWAY_PORT}" --bind lan --auth password --password "${OPENCLAW_GATEWAY_PASSWORD}" &
 PID_OPENCLAW_GATEWAY=$!  
   
