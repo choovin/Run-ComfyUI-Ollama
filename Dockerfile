@@ -1,4 +1,4 @@
-FROM ghcr.1ms.run/ggml-org/llama.cpp:server-cuda
+FROM ghcr.io/ggml-org/llama.cpp:server-cuda
 
 # Default OpenCode version. Override via build-arg OPENCODE_VERSION=...
 ARG OPENCODE_VERSION=1.2.15
@@ -11,13 +11,6 @@ WORKDIR /workspace
 
 ENV LD_LIBRARY_PATH="/app:/opt/llama/bin:/usr/local/lib:${LD_LIBRARY_PATH}"
 
-# 设置国内镜像源
-ENV NODEJS_MIRROR="https://npmmirror.com/mirrors/node"
-
-# GitHub 镜像列表（按优先级排序）
-ENV GITHUB_MIRRORS="https://mirror.ghproxy.com/https://github.com,https://ghproxy.cc/https://github.com,https://ghproxy.net/https://github.com"
-ENV GITHUB_DIRECT="https://github.com"
-
 # Bun 安装配置
 ENV BUN_INSTALL="/root/.bun"
 
@@ -27,54 +20,8 @@ COPY config/openclaw.json /workspace/config/openclaw.json
 COPY config/auth-profiles.json /workspace/config/auth-profiles.json
 COPY config/dingtalk.env /workspace/config/dingtalk.env
 
-# 创建 Git 克隆辅助脚本（尝试多个镜像源）
-COPY <<'EOF' /usr/local/bin/git-clone-mirror
-#!/bin/bash
-set -e
-REPO_URL="$1"
-TARGET_DIR="$2"
-DEPTH="${3:---depth 1}"
-BRANCH="${4:-}"
-
-# 提取仓库路径（如 chriswritescode-dev/opencode-manager.git）
-REPO_PATH=$(echo "$REPO_URL" | sed -E "s|https?://[^/]+/||")
-
-# 尝试国内镜像
-IFS="," read -ra MIRRORS <<< "$GITHUB_MIRRORS"
-for mirror in "${MIRRORS[@]}"; do
-    echo "Trying mirror: ${mirror}/${REPO_PATH}"
-    if [ -n "$BRANCH" ]; then
-        if git clone --recursive "$DEPTH" --branch "$BRANCH" "${mirror}/${REPO_PATH}" "$TARGET_DIR" 2>/dev/null; then
-            echo "Success with mirror: $mirror"
-            exit 0
-        fi
-    else
-        if git clone --recursive "$DEPTH" "${mirror}/${REPO_PATH}" "$TARGET_DIR" 2>/dev/null; then
-            echo "Success with mirror: $mirror"
-            exit 0
-        fi
-    fi
-    echo "Failed: $mirror, trying next..."
-    rm -rf "$TARGET_DIR" 2>/dev/null || true
-done
-
-# 所有镜像都失败，使用原生 GitHub
-echo "All mirrors failed, trying direct GitHub..."
-if [ -n "$BRANCH" ]; then
-    git clone --recursive "$DEPTH" --branch "$BRANCH" "${GITHUB_DIRECT}/${REPO_PATH}" "$TARGET_DIR"
-else
-    git clone --recursive "$DEPTH" "${GITHUB_DIRECT}/${REPO_PATH}" "$TARGET_DIR"
-fi
-echo "Success with direct GitHub"
-EOF
-
-RUN chmod +x /usr/local/bin/git-clone-mirror
-
-# 使用国内镜像源安装依赖
+# 安装依赖
 RUN set -eux; \
-    # 使用阿里云 Ubuntu 镜像源
-    sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list; \
-    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
       ca-certificates \
@@ -102,22 +49,18 @@ RUN set -eux; \
       ssh \
       netplan.io \
       unzip; \
-    # 使用国内镜像下载 Node.js
-    curl -fsSL "${NODEJS_MIRROR}/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" -o /tmp/node.tar.xz; \
+    # 下载 Node.js
+    curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" -o /tmp/node.tar.xz; \
     tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1; \
     rm -f /tmp/node.tar.xz; \
     corepack enable; \
     corepack prepare pnpm@10.28.1 --activate; \
-    # 使用国内镜像安装 Bun（超时回退到官方源）
+    # 安装 Bun
     export BUN_INSTALL="/root/.bun"; \
     mkdir -p "$BUN_INSTALL/bin"; \
-    # 尝试使用官方安装脚本（直接连接）
-    if ! curl -fsSL --connect-timeout 10 --max-time 60 https://bun.sh/install | bash; then \
-      echo "Failed to install bun, trying alternative..."; \
-      exit 1; \
-    fi; \
+    curl -fsSL --connect-timeout 10 --max-time 60 https://bun.sh/install | bash; \
     ln -sf "$BUN_INSTALL/bin/bun" /usr/local/bin/bun; \
-    # 使用官方源安装 OpenCode
+    # 安装 OpenCode
     if [ "${OPENCODE_VERSION}" = "latest" ]; then \
       curl -fsSL --connect-timeout 10 --max-time 120 https://opencode.ai/install | bash -s -- --no-modify-path; \
     else \
@@ -126,31 +69,34 @@ RUN set -eux; \
     mv /root/.opencode /opt/opencode; \
     chmod -R 755 /opt/opencode; \
     ln -sf /opt/opencode/bin/opencode /usr/local/bin/opencode; \
-    # 克隆 OpenCode Manager（使用国内镜像加速，原生 GitHub 兜底）
-    /usr/local/bin/git-clone-mirror "https://github.com/chriswritescode-dev/opencode-manager.git" /opt/opencode-manager "--depth 1" "${OPENCODE_MANAGER_REF}"; \
+    # 克隆 OpenCode Manager
+    if [ -n "${OPENCODE_MANAGER_REF}" ]; then \
+      git clone --depth 1 --branch "${OPENCODE_MANAGER_REF}" https://github.com/chriswritescode-dev/opencode-manager.git /opt/opencode-manager; \
+    else \
+      git clone --depth 1 https://github.com/chriswritescode-dev/opencode-manager.git /opt/opencode-manager; \
+    fi; \
     python3 /workspace/scripts/patch_opencode_manager.py; \
     cd /opt/opencode-manager; \
-    # 使用国内 npm 镜像
-    pnpm config set registry https://registry.npmmirror.com; \
     pnpm install --frozen-lockfile; \
     pnpm build; \
     mkdir -p /opt/opencode-manager/backend/node_modules/@opencode-manager /workspace/opencode-manager/data; \
     ln -sf /opt/opencode-manager/shared /opt/opencode-manager/backend/node_modules/@opencode-manager/shared; \
     rm -rf /var/lib/apt/lists/*
 
-# Install OpenClaw（使用国内镜像）
+# Install OpenClaw
 RUN set -eux; \
-    npm config set registry https://registry.npmmirror.com; \
     npm install -g openclaw; \
     mkdir -p /root/.openclaw/agents/main/agent; \
     chmod -R 755 /root/.openclaw
 
 # Install OpenClaw Mission Control
 RUN set -eux; \
-    /usr/local/bin/git-clone-mirror "https://github.com/manish-raana/openclaw-mission-control.git" /opt/openclaw-mission-control "--depth 1" "${OPENCLAW_MISSION_CONTROL_REF}"; \
+    if [ -n "${OPENCLAW_MISSION_CONTROL_REF}" ]; then \
+      git clone --depth 1 --branch "${OPENCLAW_MISSION_CONTROL_REF}" https://github.com/manish-raana/openclaw-mission-control.git /opt/openclaw-mission-control; \
+    else \
+      git clone --depth 1 https://github.com/manish-raana/openclaw-mission-control.git /opt/openclaw-mission-control; \
+    fi; \
     cd /opt/openclaw-mission-control; \
-    # 使用国内镜像
-    pnpm config set registry https://registry.npmmirror.com; \
     if [ -f "package.json" ]; then \
       pnpm install --frozen-lockfile 2>/dev/null || npm install; \
       if [ -f "package.json" ] && grep -q '"build"' package.json; then \
