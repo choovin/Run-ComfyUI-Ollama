@@ -6,7 +6,7 @@ ARG OPENCODE_MANAGER_REF=v0.9.04
 ARG NODE_VERSION=22.14.0
 ARG OPENCLAW_VERSION=latest
 ARG OPENCLAW_MISSION_CONTROL_REF=main
-ARG CONVEX_BACKEND_VERSION=0.4.0
+ARG CONVEX_BACKEND_VERSION=precompiled-2026-02-26-5fdc3b8
 
 WORKDIR /workspace
 
@@ -114,11 +114,13 @@ RUN set -eux; \
       aarch64) CONVEX_ARCH="aarch64" ;; \
       *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;; \
     esac; \
-    CONVEX_URL="https://github.com/get-convex/convex-backend/releases/download/v${CONVEX_BACKEND_VERSION}/convex-local-backend-${CONVEX_ARCH}-unknown-linux-gnu"; \
+    CONVEX_URL="https://github.com/get-convex/convex-backend/releases/download/${CONVEX_BACKEND_VERSION}/convex-local-backend-${CONVEX_ARCH}-unknown-linux-gnu.zip"; \
     mkdir -p /opt/convex-backend; \
-    curl -fsSL -o /opt/convex-backend/convex-local-backend "${CONVEX_URL}"; \
+    curl -fsSL -o /tmp/convex-backend.zip "${CONVEX_URL}"; \
+    unzip -o /tmp/convex-backend.zip -d /opt/convex-backend; \
     chmod +x /opt/convex-backend/convex-local-backend; \
-    ln -sf /opt/convex-backend/convex-local-backend /usr/local/bin/convex-local-backend
+    ln -sf /opt/convex-backend/convex-local-backend /usr/local/bin/convex-local-backend; \
+    rm -f /tmp/convex-backend.zip
 
 # Setup OpenClaw configurations
 RUN set -eux; \
