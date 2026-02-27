@@ -322,6 +322,9 @@ cat > /root/.openclaw/openclaw.json << EOF
     "auth": {
       "mode": "${OPENCLAW_GATEWAY_MODE:-token}",
       "token": "${OPENCLAW_GATEWAY_TOKEN:-your-token}"
+    },
+    "controlUi": {
+      "dangerouslyAllowHostHeaderOriginFallback": true
     }
   }
 }
@@ -443,22 +446,33 @@ while true; do
         break
     fi
       
-    if ! kill -0 "${PID_OPENCLAW_GATEWAY}" 2>/dev/null; then  
-        echo "ERROR: OpenClaw Gateway process exited before becoming ready." >&2  
-        exit 1  
+    if ! kill -0 "${PID_OPENCLAW_GATEWAY}" 2>/dev/null; then
+        echo "WARN: OpenClaw Gateway process exited before becoming ready. Continuing without Gateway..." >&2
+        PID_OPENCLAW_GATEWAY=""
+        break
+    fi
+
+    now_ts="$(date +%s)"
+    elapsed=$((now_ts - start_ts))
+    if (( elapsed >= OPENCLAW_STARTUP_TIMEOUT_SEC )); then
+        echo "WARN: OpenClaw Gateway did not become ready within ${OPENCLAW_STARTUP_TIMEOUT_SEC}s. Continuing without Gateway..." >&2
+        if [[ -n "${PID_OPENCLAW_GATEWAY}" ]]; then
+            kill "${PID_OPENCLAW_GATEWAY}" 2>/dev/null || true
+        fi
+        PID_OPENCLAW_GATEWAY=""
+        break
     fi  
       
-    now_ts="$(date +%s)"  
-    elapsed=$((now_ts - start_ts))  
-    if (( elapsed >= OPENCLAW_STARTUP_TIMEOUT_SEC )); then  
-        echo "ERROR: OpenClaw Gateway did not become ready within ${OPENCLAW_STARTUP_TIMEOUT_SEC}s." >&2  
-        exit 1  
-    fi  
-      
-    echo "[INFO] Waiting for OpenClaw Gateway to start..."  
-    sleep 2  
-done  
-echo "[INFO] OpenClaw Gateway ready: ws://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
+    echo "[INFO] Waiting for OpenClaw Gateway to start..."
+    sleep 2
+done
+
+if [[ -n "${PID_OPENCLAW_GATEWAY}" ]] && kill -0 "${PID_OPENCLAW_GATEWAY}" 2>/dev/null; then
+    echo "[INFO] OpenClaw Gateway ready: ws://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
+else
+    echo "[WARN] OpenClaw Gateway not available, continuing without it..."
+    PID_OPENCLAW_GATEWAY=""
+fi
 
 # Start Convex Backend (self-hosted)
 echo "[INFO] Starting Convex Backend on port ${CONVEX_BACKEND_PORT}"
