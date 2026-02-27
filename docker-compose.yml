@@ -6,6 +6,9 @@
 #   - OpenCode Server: 5551
 #   - OpenClaw Gateway: 18789
 #   - Mission Control: 3000
+#   - Convex Backend: 3210
+#   - Convex Site Proxy: 3211
+#   - Convex Dashboard: 6791
 
 services:
   runnode-llamacpp-opencode:
@@ -39,6 +42,12 @@ services:
       - "${PORT_OPENCLAW_GATEWAY:-18789}:18789"
       # Mission Control
       - "${PORT_OPENCLAW_MC:-3000}:3000"
+      # Convex Backend
+      - "${PORT_CONVEX_BACKEND:-3210}:3210"
+      # Convex Site Proxy
+      - "${PORT_CONVEX_SITE:-3211}:3211"
+      # Convex Dashboard
+      - "${PORT_CONVEX_DASHBOARD:-6791}:6791"
 
     volumes:
       # 模型挂载
@@ -121,6 +130,15 @@ services:
       DINGTALK_CLIENT_ID: ${DINGTALK_CLIENT_ID:-ding4iqz6zneluw2gyts}
       DINGTALK_CLIENT_SECRET: ${DINGTALK_CLIENT_SECRET:-your_dingtalk_client_secret}
       DINGTALK_ALLOWED_USERS: ${DINGTALK_ALLOWED_USERS:-*}
+
+      # ========== Convex Backend 配置 ==========
+      CONVEX_BACKEND_PORT: ${CONVEX_BACKEND_PORT:-3210}
+      CONVEX_SITE_PORT: ${CONVEX_SITE_PORT:-3211}
+      CONVEX_DASHBOARD_PORT: ${CONVEX_DASHBOARD_PORT:-6791}
+      CONVEX_DATA_DIR: ${CONVEX_DATA_DIR:-/data/convex}
+      CONVEX_INSTANCE_NAME: ${CONVEX_INSTANCE_NAME:-mission-control}
+      CONVEX_SELF_HOSTED_URL: ${CONVEX_SELF_HOSTED_URL:-http://127.0.0.1:3210}
+      CONVEX_SELF_HOSTED_ADMIN_KEY: ${CONVEX_SELF_HOSTED_ADMIN_KEY:-}
 
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/health"]

@@ -6,6 +6,7 @@ ARG OPENCODE_MANAGER_REF=v0.9.04
 ARG NODE_VERSION=22.14.0
 ARG OPENCLAW_VERSION=latest
 ARG OPENCLAW_MISSION_CONTROL_REF=main
+ARG CONVEX_BACKEND_VERSION=0.4.0
 
 WORKDIR /workspace
 
@@ -105,6 +106,20 @@ RUN set -eux; \
     fi; \
     chmod -R 755 /opt/openclaw-mission-control
 
+# Install Convex Backend (self-hosted)
+RUN set -eux; \
+    ARCH=$(uname -m); \
+    case "$ARCH" in \
+      x86_64) CONVEX_ARCH="x86_64" ;; \
+      aarch64) CONVEX_ARCH="aarch64" ;; \
+      *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;; \
+    esac; \
+    CONVEX_URL="https://github.com/get-convex/convex-backend/releases/download/v${CONVEX_BACKEND_VERSION}/convex-local-backend-${CONVEX_ARCH}-unknown-linux-gnu"; \
+    mkdir -p /opt/convex-backend; \
+    curl -fsSL -o /opt/convex-backend/convex-local-backend "${CONVEX_URL}"; \
+    chmod +x /opt/convex-backend/convex-local-backend; \
+    ln -sf /opt/convex-backend/convex-local-backend /usr/local/bin/convex-local-backend
+
 # Setup OpenClaw configurations
 RUN set -eux; \
     mkdir -p /root/.openclaw/agents/main/agent; \
@@ -130,7 +145,7 @@ ENV DINGTALK_ALLOWED_USERS=${DINGTALK_ALLOWED_USERS:-*}
 
 COPY --chmod=755 start.sh /start.sh
 
-# llama.cpp + OpenCode Manager + OpenCode Server + OpenClaw + Mission Control
-EXPOSE 8080 5003 5551 3000 18789
+# llama.cpp + OpenCode Manager + OpenCode Server + OpenClaw + Mission Control + Convex Backend
+EXPOSE 8080 5003 5551 3000 18789 3210 3211 6791
 
 ENTRYPOINT ["/start.sh"]

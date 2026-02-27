@@ -46,6 +46,13 @@ OPENCLAW_STARTUP_TIMEOUT_SEC="${OPENCLAW_STARTUP_TIMEOUT_SEC:-60}"
 OPENCLAW_MISSION_CONTROL_PORT="${OPENCLAW_MISSION_CONTROL_PORT:-3000}"
 OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC="${OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC:-60}"
 
+# Convex Backend settings
+CONVEX_BACKEND_PORT="${CONVEX_BACKEND_PORT:-3210}"
+CONVEX_SITE_PORT="${CONVEX_SITE_PORT:-3211}"
+CONVEX_DASHBOARD_PORT="${CONVEX_DASHBOARD_PORT:-6791}"
+CONVEX_DATA_DIR="${CONVEX_DATA_DIR:-/data/convex}"
+CONVEX_INSTANCE_NAME="${CONVEX_INSTANCE_NAME:-mission-control}"
+
 # DingTalk settings
 DINGTALK_CLIENT_ID="${DINGTALK_CLIENT_ID:-ding4iqz6zneluw2gyts}"
 DINGTALK_CLIENT_SECRET="${DINGTALK_CLIENT_SECRET:-0eUE-rEvcQC1-vyW5e4vxvQDovEH0SHByNGH0vsy1SGirfjwNWG-9VsiPV0mlBrz}"
@@ -347,6 +354,7 @@ cleanup() {
     echo "[INFO] Cleaning up services..."
     if [[ -n "${PID_MC_FRONTEND:-}" ]]; then kill "${PID_MC_FRONTEND}" 2>/dev/null || true; fi
     if [[ -n "${PID_MC_BACKEND:-}" ]]; then kill "${PID_MC_BACKEND}" 2>/dev/null || true; fi
+    if [[ -n "${PID_CONVEX:-}" ]]; then kill "${PID_CONVEX}" 2>/dev/null || true; fi
     if [[ -n "${PID_OPENCLAW_GATEWAY:-}" ]]; then kill "${PID_OPENCLAW_GATEWAY}" 2>/dev/null || true; fi
     if [[ -n "${PID_MANAGER:-}" ]]; then kill "${PID_MANAGER}" 2>/dev/null || true; fi
     if [[ -n "${PID_LLAMA:-}" ]]; then kill "${PID_LLAMA}" 2>/dev/null || true; fi
@@ -450,23 +458,117 @@ while true; do
 done  
 echo "[INFO] OpenClaw Gateway ready: ws://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
 
+# Start Convex Backend (self-hosted)
+echo "[INFO] Starting Convex Backend on port ${CONVEX_BACKEND_PORT}"
+mkdir -p "${CONVEX_DATA_DIR}"
+cd /opt/convex-backend
+./convex-local-backend \
+  --port "${CONVEX_BACKEND_PORT}" \
+  --site-proxy-port "${CONVEX_SITE_PORT}" \
+  --dashboard-port "${CONVEX_DASHBOARD_PORT}" \
+  --instance-name "${CONVEX_INSTANCE_NAME}" \
+  --data-dir "${CONVEX_DATA_DIR}" &
+PID_CONVEX=$!
+
+# Wait for Convex Backend to be ready
+convex_ready=0
+start_ts="$(date +%s)"
+while true; do
+    if curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:${CONVEX_BACKEND_PORT}/version" 2>/dev/null | grep -q "200"; then
+        convex_ready=1
+        break
+    fi
+
+    if ! kill -0 "${PID_CONVEX}" 2>/dev/null; then
+        echo "ERROR: Convex Backend process exited before becoming ready." >&2
+        exit 1
+    fi
+
+    now_ts="$(date +%s)"
+    elapsed=$((now_ts - start_ts))
+    if (( elapsed >= 30 )); then
+        echo "ERROR: Convex Backend did not become ready within 30s." >&2
+        exit 1
+    fi
+
+    echo "[INFO] Waiting for Convex Backend to start..."
+    sleep 2
+done
+
+if [[ "${convex_ready}" != "1" ]]; then
+    echo "ERROR: Convex Backend startup check ended unexpectedly." >&2
+    exit 1
+fi
+echo "[INFO] Convex Backend ready: http://127.0.0.1:${CONVEX_BACKEND_PORT}"
+echo "[INFO] Convex Dashboard: http://127.0.0.1:${CONVEX_DASHBOARD_PORT}"
+
+# Generate admin key for Convex
+# Note: convex-local-backend generates a deterministic key based on instance name
+# For development, we use a fixed admin key pattern
+ADMIN_KEY="convex-self-hosted-admin-key:${CONVEX_INSTANCE_NAME}"
+echo "[INFO] Convex admin key generated for instance: ${CONVEX_INSTANCE_NAME}"
+
 # Start OpenClaw Mission Control
-# NOTE: Mission Control requires external services (Convex/PostgreSQL/Redis)
-# Skipping startup for now - uncomment below when external services are available
-echo "[INFO] Skipping OpenClaw Mission Control startup (requires external services)"
-# cd /opt/openclaw-mission-control
-# export AUTH_MODE="${AUTH_MODE:-local}"
-# export LOCAL_AUTH_TOKEN="${MISSION_CONTROL_AUTH_TOKEN:-h7ZD0gcRspozjf7sSLeeyEtupKn8lD8MxJayV2Pf754=mission_control_token}"
-# export DATABASE_URL="sqlite+aiosqlite:///mission_control.db"
-# export CORS_ORIGINS="http://localhost:${OPENCLAW_MISSION_CONTROL_PORT}"
-# cd /opt/openclaw-mission-control/backend
-# /opt/openclaw-mission-control/backend/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
-# PID_MC_BACKEND=$!
-# cd /opt/openclaw-mission-control/frontend
-# NEXT_PUBLIC_API_URL=http://127.0.0.1:8000 NEXT_PUBLIC_AUTH_MODE=local npm run start -- --port ${OPENCLAW_MISSION_CONTROL_PORT} &
-# PID_MC_FRONTEND=$!
+echo "[INFO] Starting OpenClaw Mission Control on port ${OPENCLAW_MISSION_CONTROL_PORT}"
+cd /opt/openclaw-mission-control
+
+# Set Convex self-hosted configuration
+export CONVEX_SELF_HOSTED_URL="http://127.0.0.1:${CONVEX_BACKEND_PORT}"
+export CONVEX_SELF_HOSTED_ADMIN_KEY="${ADMIN_KEY}"
+
+# Initialize Convex schema if convex folder exists
+if [ -d "convex" ]; then
+    echo "[INFO] Initializing Convex schema..."
+    npx convex dev --once --url "${CONVEX_SELF_HOSTED_URL}" --admin-key "${ADMIN_KEY}" 2>/dev/null || {
+        echo "[WARN] Convex schema initialization failed, continuing anyway..."
+    }
+fi
+
+# Start frontend server
+# Check if built output exists
+if [ -d ".next" ] || [ -d "dist" ]; then
+    echo "[INFO] Starting Mission Control frontend..."
+    pnpm preview --port "${OPENCLAW_MISSION_CONTROL_PORT}" --host 0.0.0.0 &
+    PID_MC_FRONTEND=$!
+else
+    echo "[WARN] Mission Control not built, attempting to start dev server..."
+    pnpm dev --port "${OPENCLAW_MISSION_CONTROL_PORT}" --host 0.0.0.0 &
+    PID_MC_FRONTEND=$!
+fi
+
+# Wait for Mission Control to be ready
+mc_ready=0
+start_ts="$(date +%s)"
+while true; do
+    http_code="$(curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:${OPENCLAW_MISSION_CONTROL_PORT}" 2>/dev/null || echo "000")"
+    if [[ "${http_code}" == "200" || "${http_code}" == "304" ]]; then
+        mc_ready=1
+        break
+    fi
+
+    if ! kill -0 "${PID_MC_FRONTEND}" 2>/dev/null; then
+        echo "WARN: Mission Control frontend process exited before becoming ready." >&2
+        break
+    fi
+
+    now_ts="$(date +%s)"
+    elapsed=$((now_ts - start_ts))
+    if (( elapsed >= OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC )); then
+        echo "WARN: Mission Control did not become ready within ${OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC}s." >&2
+        break
+    fi
+
+    echo "[INFO] Waiting for Mission Control to start... (last HTTP code: ${http_code})"
+    sleep 2
+done
+
+if [[ "${mc_ready}" == "1" ]]; then
+    echo "[INFO] Mission Control ready: http://127.0.0.1:${OPENCLAW_MISSION_CONTROL_PORT}"
+else
+    echo "[WARN] Mission Control startup incomplete, but continuing..."
+fi
+
 PID_MC_BACKEND=""
-PID_MC_FRONTEND=""
 
 # Start llama-server
 echo "[INFO] Starting llama-server on ${LLAMACPP_HOST}:${LLAMACPP_PORT}"
@@ -510,10 +612,12 @@ echo "[INFO] llama.cpp Server:     http://127.0.0.1:${LLAMACPP_PORT}"
 echo "[INFO] OpenCode Manager:     http://127.0.0.1:${OPENCODE_MANAGER_PORT}"
 echo "[INFO] Opencode Server:      http://127.0.0.1:${OPENCODE_SERVER_PORT}"
 echo "[INFO] OpenClaw Gateway:     http://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
-if [[ -n "${PID_MC_BACKEND}" ]] && kill -0 "${PID_MC_BACKEND}" 2>/dev/null && kill -0 "${PID_MC_FRONTEND}" 2>/dev/null; then
+echo "[INFO] Convex Backend:       http://127.0.0.1:${CONVEX_BACKEND_PORT}"
+echo "[INFO] Convex Dashboard:     http://127.0.0.1:${CONVEX_DASHBOARD_PORT}"
+if [[ -n "${PID_MC_FRONTEND}" ]] && kill -0 "${PID_MC_FRONTEND}" 2>/dev/null; then
     echo "[INFO] Mission Control:      http://127.0.0.1:${OPENCLAW_MISSION_CONTROL_PORT}"
 fi
 echo "[INFO] =========================================="
 
 # Wait for any process to exit
-wait -n "${PID_MANAGER}" "${PID_LLAMA}" "${PID_OPENCLAW_GATEWAY}" "${PID_MC_BACKEND}" "${PID_MC_FRONTEND}"
+wait -n "${PID_MANAGER}" "${PID_LLAMA}" "${PID_OPENCLAW_GATEWAY}" "${PID_CONVEX}" "${PID_MC_FRONTEND}"
