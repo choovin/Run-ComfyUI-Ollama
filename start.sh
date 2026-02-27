@@ -37,7 +37,9 @@ OPENCODE_MANAGER_STARTUP_TIMEOUT_SEC="${OPENCODE_MANAGER_STARTUP_TIMEOUT_SEC:-30
 # OpenClaw settings
 OPENCLAW_GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 OPENCLAW_GATEWAY_HOST="${OPENCLAW_GATEWAY_HOST:-0.0.0.0}"
+OPENCLAW_GATEWAY_MODE="${OPENCLAW_GATEWAY_MODE:-token}"
 OPENCLAW_GATEWAY_PASSWORD="${OPENCLAW_GATEWAY_PASSWORD:-your-password}"
+OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-your-token}"
 OPENCLAW_STARTUP_TIMEOUT_SEC="${OPENCLAW_STARTUP_TIMEOUT_SEC:-60}"
 
 # OpenClaw Mission Control settings
@@ -270,6 +272,7 @@ mkdir -p /root/.openclaw/agents/main/agent
 cat > /root/.openclaw/openclaw.json << EOF
 {
   "models": {
+    "mode": "merge",
     "providers": {
       "minimax": {
         "baseUrl": "https://comfyui-nn-h200-136-71g-3.bytebroad.com",
@@ -301,16 +304,20 @@ cat > /root/.openclaw/openclaw.json << EOF
   },
   "agents": {
     "defaults": {
+      "workspace": "~/.openclaw/workspace",
       "model": { "primary": "minimax/minimax25" }
     }
   },
   "gateway": {
     "port": ${OPENCLAW_GATEWAY_PORT},
     "mode": "local",
-    "bind": "lan",
+    "bind": "auto",
     "auth": {
-      "mode": "password",
-      "password": "${OPENCLAW_GATEWAY_PASSWORD:-your-password}"
+      "mode": "${OPENCLAW_GATEWAY_MODE:-token}",
+      "token": "${OPENCLAW_GATEWAY_TOKEN:-your-token}"
+    },
+    "controlUi": {
+      "dangerouslyAllowHostHeaderOriginFallback": true
     }
   }
 }
@@ -341,7 +348,8 @@ chmod -R 755 /root/.openclaw
 cleanup() {
     local code=$?
     echo "[INFO] Cleaning up services..."
-    if [[ -n "${PID_MISSION_CONTROL:-}" ]]; then kill "${PID_MISSION_CONTROL}" 2>/dev/null || true; fi
+    if [[ -n "${PID_MC_FRONTEND:-}" ]]; then kill "${PID_MC_FRONTEND}" 2>/dev/null || true; fi
+    if [[ -n "${PID_MC_BACKEND:-}" ]]; then kill "${PID_MC_BACKEND}" 2>/dev/null || true; fi
     if [[ -n "${PID_OPENCLAW_GATEWAY:-}" ]]; then kill "${PID_OPENCLAW_GATEWAY}" 2>/dev/null || true; fi
     if [[ -n "${PID_MANAGER:-}" ]]; then kill "${PID_MANAGER}" 2>/dev/null || true; fi
     if [[ -n "${PID_LLAMA:-}" ]]; then kill "${PID_LLAMA}" 2>/dev/null || true; fi
@@ -407,7 +415,7 @@ echo "[INFO] OpenCode Manager ready: http://127.0.0.1:${OPENCODE_MANAGER_PORT}"
 
 # Start OpenClaw Gateway
 echo "[INFO] Starting OpenClaw Gateway on port ${OPENCLAW_GATEWAY_PORT}"
-openclaw gateway --mode local --port "${OPENCLAW_GATEWAY_PORT}" --bind lan --auth password --password "${OPENCLAW_GATEWAY_PASSWORD}" &
+openclaw gateway run --port "${OPENCLAW_GATEWAY_PORT}" --bind lan --auth password --password "${OPENCLAW_GATEWAY_PASSWORD}" &
 PID_OPENCLAW_GATEWAY=$!  
   
 # Wait for Gateway to be ready  
@@ -446,51 +454,22 @@ done
 echo "[INFO] OpenClaw Gateway ready: ws://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
 
 # Start OpenClaw Mission Control
-echo "[INFO] Starting OpenClaw Mission Control on port ${OPENCLAW_MISSION_CONTROL_PORT}"
-cd /opt/openclaw-mission-control
-if [ -f "package.json" ] && grep -q '"start"' package.json; then
-    pnpm start &
-    PID_MISSION_CONTROL=$!
-elif [ -f "dist/index.js" ]; then
-    node dist/index.js &
-    PID_MISSION_CONTROL=$!
-elif [ -f "index.js" ]; then
-    node index.js &
-    PID_MISSION_CONTROL=$!
-else
-    echo "[WARN] OpenClaw Mission Control start script not found, skipping..."
-    PID_MISSION_CONTROL=""
-fi
-
-# Wait for Mission Control to be ready (if started)
-if [[ -n "${PID_MISSION_CONTROL}" ]]; then
-    mc_ready=0
-    start_ts="$(date +%s)"
-    while true; do
-        if curl -sS "http://127.0.0.1:${OPENCLAW_MISSION_CONTROL_PORT}/health" >/dev/null 2>&1; then
-            mc_ready=1
-            break
-        fi
-
-        if ! kill -0 "${PID_MISSION_CONTROL}" 2>/dev/null; then
-            echo "WARN: OpenClaw Mission Control process exited before becoming ready." >&2
-            break
-        fi
-
-        now_ts="$(date +%s)"
-        elapsed=$((now_ts - start_ts))
-        if (( elapsed >= OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC )); then
-            echo "WARN: OpenClaw Mission Control did not become ready within ${OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC}s." >&2
-            break
-        fi
-
-        echo "[INFO] Waiting for OpenClaw Mission Control to start..."
-        sleep 2
-    done
-    if [[ "${mc_ready}" == "1" ]]; then
-        echo "[INFO] OpenClaw Mission Control ready: http://127.0.0.1:${OPENCLAW_MISSION_CONTROL_PORT}"
-    fi
-fi
+# NOTE: Mission Control requires external services (Convex/PostgreSQL/Redis)
+# Skipping startup for now - uncomment below when external services are available
+echo "[INFO] Skipping OpenClaw Mission Control startup (requires external services)"
+# cd /opt/openclaw-mission-control
+# export AUTH_MODE="${AUTH_MODE:-local}"
+# export LOCAL_AUTH_TOKEN="${MISSION_CONTROL_AUTH_TOKEN:-h7ZD0gcRspozjf7sSLeeyEtupKn8lD8MxJayV2Pf754=mission_control_token}"
+# export DATABASE_URL="sqlite+aiosqlite:///mission_control.db"
+# export CORS_ORIGINS="http://localhost:${OPENCLAW_MISSION_CONTROL_PORT}"
+# cd /opt/openclaw-mission-control/backend
+# /opt/openclaw-mission-control/backend/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+# PID_MC_BACKEND=$!
+# cd /opt/openclaw-mission-control/frontend
+# NEXT_PUBLIC_API_URL=http://127.0.0.1:8000 NEXT_PUBLIC_AUTH_MODE=local npm run start -- --port ${OPENCLAW_MISSION_CONTROL_PORT} &
+# PID_MC_FRONTEND=$!
+PID_MC_BACKEND=""
+PID_MC_FRONTEND=""
 
 # Start llama-server
 echo "[INFO] Starting llama-server on ${LLAMACPP_HOST}:${LLAMACPP_PORT}"
@@ -534,10 +513,10 @@ echo "[INFO] llama.cpp Server:     http://127.0.0.1:${LLAMACPP_PORT}"
 echo "[INFO] OpenCode Manager:     http://127.0.0.1:${OPENCODE_MANAGER_PORT}"
 echo "[INFO] Opencode Server:      http://127.0.0.1:${OPENCODE_SERVER_PORT}"
 echo "[INFO] OpenClaw Gateway:     http://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
-if [[ -n "${PID_MISSION_CONTROL}" ]] && kill -0 "${PID_MISSION_CONTROL}" 2>/dev/null; then
+if [[ -n "${PID_MC_BACKEND}" ]] && kill -0 "${PID_MC_BACKEND}" 2>/dev/null && kill -0 "${PID_MC_FRONTEND}" 2>/dev/null; then
     echo "[INFO] Mission Control:      http://127.0.0.1:${OPENCLAW_MISSION_CONTROL_PORT}"
 fi
 echo "[INFO] =========================================="
 
 # Wait for any process to exit
-wait -n "${PID_MANAGER}" "${PID_LLAMA}" "${PID_OPENCLAW_GATEWAY}" "${PID_MISSION_CONTROL:-}"
+wait -n "${PID_MANAGER}" "${PID_LLAMA}" "${PID_OPENCLAW_GATEWAY}" "${PID_MC_BACKEND}" "${PID_MC_FRONTEND}"

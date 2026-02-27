@@ -2,3 +2,5 @@ jenkins-deploy/
 _research/
 # local scratch
 .tmp/
+.env
+.env.local
