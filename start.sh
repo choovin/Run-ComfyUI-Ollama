@@ -315,9 +315,6 @@ cat > /root/.openclaw/openclaw.json << EOF
     "auth": {
       "mode": "${OPENCLAW_GATEWAY_MODE:-token}",
       "token": "${OPENCLAW_GATEWAY_TOKEN:-your-token}"
-    },
-    "controlUi": {
-      "dangerouslyAllowHostHeaderOriginFallback": true
     }
   }
 }
