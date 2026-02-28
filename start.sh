@@ -63,6 +63,38 @@ DINGTALK_ALLOWED_USERS="${DINGTALK_ALLOWED_USERS:-*}"
 # Model selection (GGUF) via preset + per-model path env vars.
 MODEL_PRESET="${MODEL_PRESET:-${LLAMACPP_MODEL_PRESET:-minimax25}}"
 GPU_PROFILE="${GPU_PROFILE:-${LLAMACPP_GPU_PROFILE:-71g}}"
+
+# Inference engine selection: llama.cpp, vllm, or sglang
+INFERENCE_ENGINE="${INFERENCE_ENGINE:-llamacpp}"
+
+# vLLM settings
+VLLM_HOST="${VLLM_HOST:-0.0.0.0}"
+VLLM_PORT="${VLLM_PORT:-8000}"
+VLLM_MODEL_PATH="${VLLM_MODEL_PATH:-}"
+VLLM_MODEL_HF_ID="${VLLM_MODEL_HF_ID:-}"
+VLLM_TENSOR_PARALLEL_SIZE="${VLLM_TENSOR_PARALLEL_SIZE:-1}"
+VLLM_GPU_MEMORY_UTILIZATION="${VLLM_GPU_MEMORY_UTILIZATION:-0.9}"
+VLLM_MAX_NUM_SEQS="${VLLM_MAX_NUM_SEQS:-256}"
+VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-32768}"
+VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS:-}"
+
+# SGLang settings
+SGLANG_HOST="${SGLANG_HOST:-0.0.0.0}"
+SGLANG_PORT="${SGLANG_PORT:-8001}"
+SGLANG_MODEL_PATH="${SGLANG_MODEL_PATH:-}"
+SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-}"
+SGLANG_TP_SIZE="${SGLANG_TP_SIZE:-1}"
+SGLANG_MAX_MODEL_LEN="${SGLANG_MAX_MODEL_LEN:-32768}"
+SGLANG_EXTRA_ARGS="${SGLANG_EXTRA_ARGS:-}"
+
+# Model paths for vLLM (supports HF model IDs or local paths)
+MODEL_PATH_STEP35="${MODEL_PATH_STEP35:-}"
+MODEL_PATH_QWEN35FP8="${MODEL_PATH_QWEN35FP8:-}"
+MODEL_PATH_GLM5_VLLM="${MODEL_PATH_GLM5_VLLM:-}"
+MODEL_PATH_GLM47FLASH_VLLM="${MODEL_PATH_GLM47FLASH_VLLM:-}"
+MODEL_PATH_MINIMAX25_VLLM="${MODEL_PATH_MINIMAX25_VLLM:-}"
+MODEL_PATH_KIMI25_VLLM="${MODEL_PATH_KIMI25_VLLM:-}"
+
 MODEL_PATH_GLM5="${MODEL_PATH_GLM5:-}"
 MODEL_PATH_GLM47FLASH="${MODEL_PATH_GLM47FLASH:-}"
 MODEL_PATH_MINIMAX25="${MODEL_PATH_MINIMAX25:-}"
@@ -118,6 +150,86 @@ if [[ -z "${LLAMACPP_MODEL_PATH}" ]]; then
             exit 1
             ;;
     esac
+fi
+
+# vLLM model configuration
+if [[ "${INFERENCE_ENGINE}" == "vllm" ]]; then
+    if [[ -z "${VLLM_MODEL_PATH}" && -z "${VLLM_MODEL_HF_ID}" ]]; then
+        case "${MODEL_PRESET}" in
+            step35|step3.5|step-3.5-flash|step35flash)
+                VLLM_MODEL_PATH="${MODEL_PATH_STEP35:-}"
+                VLLM_MODEL_HF_ID="${VLLM_MODEL_HF_ID:-stepfun-ai/Step-3.5-Flash}"
+                VLLM_TENSOR_PARALLEL_SIZE="${VLLM_TENSOR_PARALLEL_SIZE:-1}"
+                VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-131072}"
+                ;;
+            glm5|glm-5)
+                VLLM_MODEL_PATH="${MODEL_PATH_GLM5_VLLM:-}"
+                VLLM_MODEL_HF_ID="${VLLM_MODEL_HF_ID:-}"
+                ;;
+            glm47flash|glm47|glm-4.7-flash|glm-4.7)
+                VLLM_MODEL_PATH="${MODEL_PATH_GLM47FLASH_VLLM:-}"
+                VLLM_MODEL_HF_ID="${VLLM_MODEL_HF_ID:-}"
+                ;;
+            minimax25|minimax-2.5|minimax2.5)
+                VLLM_MODEL_PATH="${MODEL_PATH_MINIMAX25_VLLM:-}"
+                VLLM_MODEL_HF_ID="${VLLM_MODEL_HF_ID:-}"
+                ;;
+            kimi25|kimi-2.5|kimi2.5)
+                VLLM_MODEL_PATH="${MODEL_PATH_KIMI25_VLLM:-}"
+                VLLM_MODEL_HF_ID="${VLLM_MODEL_HF_ID:-}"
+                ;;
+            qwen35fp8|qwen3.5-fp8|qwen3.5fp8)
+                VLLM_MODEL_PATH="${MODEL_PATH_QWEN35FP8:-}"
+                VLLM_MODEL_HF_ID="${VLLM_MODEL_HF_ID:-Qwen/Qwen3.5-27B-FP8}"
+                VLLM_TENSOR_PARALLEL_SIZE="${VLLM_TENSOR_PARALLEL_SIZE:-2}"
+                VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-32768}"
+                ;;
+            *)
+                echo "ERROR: Unknown MODEL_PRESET='${MODEL_PRESET}' for vLLM. Supported: step35, qwen35fp8, glm5, glm47flash, minimax25, kimi25" >&2
+                exit 1
+                ;;
+        esac
+    fi
+fi
+
+# SGLang model configuration
+if [[ "${INFERENCE_ENGINE}" == "sglang" ]]; then
+    if [[ -z "${SGLANG_MODEL_PATH}" && -z "${SGLANG_MODEL_HF_ID}" ]]; then
+        case "${MODEL_PRESET}" in
+            step35|step3.5|step-3.5-flash|step35flash)
+                SGLANG_MODEL_PATH="${MODEL_PATH_STEP35:-}"
+                SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-stepfun-ai/Step-3.5-Flash}"
+                SGLANG_TP_SIZE="${SGLANG_TP_SIZE:-1}"
+                SGLANG_MAX_MODEL_LEN="${SGLANG_MAX_MODEL_LEN:-131072}"
+                ;;
+            qwen35fp8|qwen3.5-fp8|qwen3.5fp8)
+                SGLANG_MODEL_PATH="${MODEL_PATH_QWEN35FP8:-}"
+                SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-Qwen/Qwen3.5-27B-FP8}"
+                SGLANG_TP_SIZE="${SGLANG_TP_SIZE:-2}"
+                SGLANG_MAX_MODEL_LEN="${SGLANG_MAX_MODEL_LEN:-32768}"
+                ;;
+            glm5|glm-5)
+                SGLANG_MODEL_PATH="${MODEL_PATH_GLM5_VLLM:-}"
+                SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-}"
+                ;;
+            glm47flash|glm47|glm-4.7-flash|glm-4.7)
+                SGLANG_MODEL_PATH="${MODEL_PATH_GLM47FLASH_VLLM:-}"
+                SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-}"
+                ;;
+            minimax25|minimax-2.5|minimax2.5)
+                SGLANG_MODEL_PATH="${MODEL_PATH_MINIMAX25_VLLM:-}"
+                SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-}"
+                ;;
+            kimi25|kimi-2.5|kimi2.5)
+                SGLANG_MODEL_PATH="${MODEL_PATH_KIMI25_VLLM:-}"
+                SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-}"
+                ;;
+            *)
+                echo "ERROR: Unknown MODEL_PRESET='${MODEL_PRESET}' for SGLang. Supported: step35, qwen35fp8, glm5, glm47flash, minimax25, kimi25" >&2
+                exit 1
+                ;;
+        esac
+    fi
 fi
 
 if [[ -z "${LLAMACPP_ALIAS}" ]]; then
@@ -247,18 +359,54 @@ fi
 
 # ==================== Validation ====================
 
-if [[ -z "${LLAMACPP_MODEL_PATH}" ]]; then
-    echo "ERROR: No model selected." >&2
-    echo "Set either LLAMACPP_MODEL_PATH directly, or set MODEL_PRESET + corresponding MODEL_PATH_*." >&2
-    echo "Examples:" >&2
-    echo "  MODEL_PRESET=glm47flash MODEL_PATH_GLM47FLASH=/models/<your-glm47flash>.gguf" >&2
-    echo "  MODEL_PRESET=glm5 MODEL_PATH_GLM5=/models/<your-glm5>.gguf" >&2
-    exit 1
-fi
+# Validate based on inference engine
+if [[ "${INFERENCE_ENGINE}" == "llamacpp" ]]; then
+    if [[ -z "${LLAMACPP_MODEL_PATH}" ]]; then
+        echo "ERROR: No model selected for llama.cpp." >&2
+        echo "Set either LLAMACPP_MODEL_PATH directly, or set MODEL_PRESET + corresponding MODEL_PATH_*." >&2
+        echo "Examples:" >&2
+        echo "  MODEL_PRESET=glm47flash MODEL_PATH_GLM47FLASH=/models/<your-glm47flash>.gguf" >&2
+        echo "  MODEL_PRESET=glm5 MODEL_PATH_GLM5=/models/<your-glm5>.gguf" >&2
+        exit 1
+    fi
 
-if [[ ! -f "${LLAMACPP_MODEL_PATH}" ]]; then
-    echo "ERROR: GGUF model not found: ${LLAMACPP_MODEL_PATH}" >&2
-    echo "Check your /models mount and MODEL_PATH_* / LLAMACPP_MODEL_PATH settings." >&2
+    if [[ ! -f "${LLAMACPP_MODEL_PATH}" ]]; then
+        echo "ERROR: GGUF model not found: ${LLAMACPP_MODEL_PATH}" >&2
+        echo "Check your /models mount and MODEL_PATH_* / LLAMACPP_MODEL_PATH settings." >&2
+        exit 1
+    fi
+elif [[ "${INFERENCE_ENGINE}" == "vllm" ]]; then
+    if [[ -z "${VLLM_MODEL_PATH}" && -z "${VLLM_MODEL_HF_ID}" ]]; then
+        echo "ERROR: No model selected for vLLM." >&2
+        echo "Set either VLLM_MODEL_PATH, VLLM_MODEL_HF_ID, or set MODEL_PRESET." >&2
+        echo "Examples:" >&2
+        echo "  INFERENCE_ENGINE=vllm MODEL_PRESET=step35" >&2
+        echo "  INFERENCE_ENGINE=vllm VLLM_MODEL_HF_ID=stepfun-ai/Step-3.5-Flash" >&2
+        echo "  INFERENCE_ENGINE=vllm VLLM_MODEL_PATH=/models/your-model" >&2
+        exit 1
+    fi
+
+    if [[ -n "${VLLM_MODEL_PATH}" && ! -d "${VLLM_MODEL_PATH}" && ! -f "${VLLM_MODEL_PATH}" ]]; then
+        echo "ERROR: vLLM model path not found: ${VLLM_MODEL_PATH}" >&2
+        exit 1
+    fi
+elif [[ "${INFERENCE_ENGINE}" == "sglang" ]]; then
+    if [[ -z "${SGLANG_MODEL_PATH}" && -z "${SGLANG_MODEL_HF_ID}" ]]; then
+        echo "ERROR: No model selected for SGLang." >&2
+        echo "Set either SGLANG_MODEL_PATH, SGLANG_MODEL_HF_ID, or set MODEL_PRESET." >&2
+        echo "Examples:" >&2
+        echo "  INFERENCE_ENGINE=sglang MODEL_PRESET=step35" >&2
+        echo "  INFERENCE_ENGINE=sglang SGLANG_MODEL_HF_ID=stepfun-ai/Step-3.5-Flash" >&2
+        echo "  INFERENCE_ENGINE=sglang SGLANG_MODEL_PATH=/models/your-model" >&2
+        exit 1
+    fi
+
+    if [[ -n "${SGLANG_MODEL_PATH}" && ! -d "${SGLANG_MODEL_PATH}" && ! -f "${SGLANG_MODEL_PATH}" ]]; then
+        echo "ERROR: SGLang model path not found: ${SGLANG_MODEL_PATH}" >&2
+        exit 1
+    fi
+else
+    echo "ERROR: Unknown INFERENCE_ENGINE='${INFERENCE_ENGINE}'. Supported: llama.cpp, vllm, sglang" >&2
     exit 1
 fi
 
@@ -600,45 +748,177 @@ fi
 
 PID_MC_BACKEND=""
 
-# Start llama-server
-echo "[INFO] Starting llama-server on ${LLAMACPP_HOST}:${LLAMACPP_PORT}"
-LLAMACPP_BIN="${LLAMACPP_BIN:-}"
-if [[ -z "${LLAMACPP_BIN}" ]]; then
-    if command -v llama-server >/dev/null 2>&1; then
-        LLAMACPP_BIN="llama-server"
-    elif [[ -x "/app/llama-server" ]]; then
-        LLAMACPP_BIN="/app/llama-server"
-    elif [[ -x "/opt/llama/bin/llama-server" ]]; then
-        LLAMACPP_BIN="/opt/llama/bin/llama-server"
-    else
-        echo "ERROR: llama-server not found in PATH, /app, or /opt/llama/bin" >&2
+# Start inference engine (llama.cpp or vllm)
+if [[ "${INFERENCE_ENGINE}" == "vllm" ]]; then
+    echo "[INFO] Starting vLLM on ${VLLM_HOST}:${VLLM_PORT}"
+    
+    # Determine model source
+    VLLM_MODEL_ARG=""
+    if [[ -n "${VLLM_MODEL_HF_ID}" ]]; then
+        VLLM_MODEL_ARG="${VLLM_MODEL_HF_ID}"
+    elif [[ -n "${VLLM_MODEL_PATH}" ]]; then
+        VLLM_MODEL_ARG="${VLLM_MODEL_PATH}"
+    fi
+    
+    VLLM_CMD=(
+        python3 -m vllm.entrypoints.openai.api_server
+        --host "${VLLM_HOST}"
+        --port "${VLLM_PORT}"
+        --model "${VLLM_MODEL_ARG}"
+        --tensor-parallel-size "${VLLM_TENSOR_PARALLEL_SIZE}"
+        --gpu-memory-utilization "${VLLM_GPU_MEMORY_UTILIZATION}"
+        --max-num-seqs "${VLLM_MAX_NUM_SEQS}"
+        --max-model-len "${VLLM_MAX_MODEL_LEN}"
+        --trust-remote-code
+    )
+    
+    if [[ -n "${VLLM_EXTRA_ARGS}" ]]; then
+        EXTRA=(${VLLM_EXTRA_ARGS})
+        VLLM_CMD+=("${EXTRA[@]}")
+    fi
+    
+    echo "[INFO] vLLM command: ${VLLM_CMD[*]}"
+    "${VLLM_CMD[@]}" &
+    PID_LLAMA=$!
+    
+    # Wait for vLLM to be ready
+    vllm_ready=0
+    start_ts="$(date +%s)"
+    while true; do
+        http_code="$(curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:${VLLM_PORT}/v1/models" 2>/dev/null || echo "000")"
+        if [[ "${http_code}" == "200" ]]; then
+            vllm_ready=1
+            break
+        fi
+
+        if ! kill -0 "${PID_LLAMA}" 2>/dev/null; then
+            echo "ERROR: vLLM process exited before becoming ready." >&2
+            exit 1
+        fi
+
+        now_ts="$(date +%s)"
+        elapsed=$((now_ts - start_ts))
+        if (( elapsed >= 120 )); then
+            echo "ERROR: vLLM did not become ready within 120s." >&2
+            exit 1
+        fi
+
+        echo "[INFO] Waiting for vLLM to start... (last HTTP code: ${http_code})"
+        sleep 3
+    done
+    
+    if [[ "${vllm_ready}" != "1" ]]; then
+        echo "ERROR: vLLM startup check ended unexpectedly." >&2
         exit 1
     fi
+    echo "[INFO] vLLM ready: http://127.0.0.1:${VLLM_PORT}"
+elif [[ "${INFERENCE_ENGINE}" == "sglang" ]]; then
+    echo "[INFO] Starting SGLang on ${SGLANG_HOST}:${SGLANG_PORT}"
+    
+    # Determine model source
+    SGLANG_MODEL_ARG=""
+    if [[ -n "${SGLANG_MODEL_HF_ID}" ]]; then
+        SGLANG_MODEL_ARG="${SGLANG_MODEL_HF_ID}"
+    elif [[ -n "${SGLANG_MODEL_PATH}" ]]; then
+        SGLANG_MODEL_ARG="${SGLANG_MODEL_PATH}"
+    fi
+    
+    SGLANG_CMD=(
+        python3 -m sglang.launch_server
+        --host "${SGLANG_HOST}"
+        --port "${SGLANG_PORT}"
+        --model "${SGLANG_MODEL_ARG}"
+        --tp-size "${SGLANG_TP_SIZE}"
+        --max-model-len "${SGLANG_MAX_MODEL_LEN}"
+        --trust-remote-code
+    )
+    
+    if [[ -n "${SGLANG_EXTRA_ARGS}" ]]; then
+        EXTRA=(${SGLANG_EXTRA_ARGS})
+        SGLANG_CMD+=("${EXTRA[@]}")
+    fi
+    
+    echo "[INFO] SGLang command: ${SGLANG_CMD[*]}"
+    "${SGLANG_CMD[@]}" &
+    PID_LLAMA=$!
+    
+    # Wait for SGLang to be ready
+    sglang_ready=0
+    start_ts="$(date +%s)"
+    while true; do
+        http_code="$(curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:${SGLANG_PORT}/v1/models" 2>/dev/null || echo "000")"
+        if [[ "${http_code}" == "200" ]]; then
+            sglang_ready=1
+            break
+        fi
+
+        if ! kill -0 "${PID_LLAMA}" 2>/dev/null; then
+            echo "ERROR: SGLang process exited before becoming ready." >&2
+            exit 1
+        fi
+
+        now_ts="$(date +%s)"
+        elapsed=$((now_ts - start_ts))
+        if (( elapsed >= 120 )); then
+            echo "ERROR: SGLang did not become ready within 120s." >&2
+            exit 1
+        fi
+
+        echo "[INFO] Waiting for SGLang to start... (last HTTP code: ${http_code})"
+        sleep 3
+    done
+    
+    if [[ "${sglang_ready}" != "1" ]]; then
+        echo "ERROR: SGLang startup check ended unexpectedly." >&2
+        exit 1
+    fi
+    echo "[INFO] SGLang ready: http://127.0.0.1:${SGLANG_PORT}"
+else
+    # Default to llama.cpp
+    echo "[INFO] Starting llama-server on ${LLAMACPP_HOST}:${LLAMACPP_PORT}"
+    LLAMACPP_BIN="${LLAMACPP_BIN:-}"
+    if [[ -z "${LLAMACPP_BIN}" ]]; then
+        if command -v llama-server >/dev/null 2>&1; then
+            LLAMACPP_BIN="llama-server"
+        elif [[ -x "/app/llama-server" ]]; then
+            LLAMACPP_BIN="/app/llama-server"
+        elif [[ -x "/opt/llama/bin/llama-server" ]]; then
+            LLAMACPP_BIN="/opt/llama/bin/llama-server"
+        else
+            echo "ERROR: llama-server not found in PATH, /app, or /opt/llama/bin" >&2
+            exit 1
+        fi
+    fi
+    CMD=(
+      "${LLAMACPP_BIN}"
+      --host "${LLAMACPP_HOST}"
+      --port "${LLAMACPP_PORT}"
+      --model "${LLAMACPP_MODEL_PATH}"
+      --alias "${LLAMACPP_ALIAS}"
+      --ctx-size "${LLAMACPP_CTX_SIZE}"
+      --n-gpu-layers "${LLAMACPP_N_GPU_LAYERS}"
+      --threads "${LLAMACPP_THREADS}"
+      --parallel "${LLAMACPP_PARALLEL}"
+      --jinja
+    )
+    if [[ -n "${LLAMACPP_EXTRA_ARGS}" ]]; then
+        EXTRA=(${LLAMACPP_EXTRA_ARGS})
+        CMD+=("${EXTRA[@]}")
+    fi
+    "${CMD[@]}" &
+    PID_LLAMA=$!
 fi
-CMD=(
-  "${LLAMACPP_BIN}"
-  --host "${LLAMACPP_HOST}"
-  --port "${LLAMACPP_PORT}"
-  --model "${LLAMACPP_MODEL_PATH}"
-  --alias "${LLAMACPP_ALIAS}"
-  --ctx-size "${LLAMACPP_CTX_SIZE}"
-  --n-gpu-layers "${LLAMACPP_N_GPU_LAYERS}"
-  --threads "${LLAMACPP_THREADS}"
-  --parallel "${LLAMACPP_PARALLEL}"
-  --jinja
-)
-if [[ -n "${LLAMACPP_EXTRA_ARGS}" ]]; then
-    # shellcheck disable=SC2206
-    EXTRA=(${LLAMACPP_EXTRA_ARGS})
-    CMD+=("${EXTRA[@]}")
-fi
-"${CMD[@]}" &
-PID_LLAMA=$!
 
 echo "[INFO] =========================================="
 echo "[INFO] All services started successfully!"
 echo "[INFO] =========================================="
-echo "[INFO] llama.cpp Server:     http://127.0.0.1:${LLAMACPP_PORT}"
+if [[ "${INFERENCE_ENGINE}" == "vllm" ]]; then
+    echo "[INFO] vLLM Server:          http://127.0.0.1:${VLLM_PORT}"
+elif [[ "${INFERENCE_ENGINE}" == "sglang" ]]; then
+    echo "[INFO] SGLang Server:        http://127.0.0.1:${SGLANG_PORT}"
+else
+    echo "[INFO] llama.cpp Server:    http://127.0.0.1:${LLAMACPP_PORT}"
+fi
 echo "[INFO] OpenCode Manager:     http://127.0.0.1:${OPENCODE_MANAGER_PORT}"
 echo "[INFO] Opencode Server:      http://127.0.0.1:${OPENCODE_SERVER_PORT}"
 echo "[INFO] OpenClaw Gateway:     http://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
