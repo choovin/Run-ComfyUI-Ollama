@@ -52,6 +52,7 @@ CONVEX_SITE_PORT="${CONVEX_SITE_PORT:-3211}"
 CONVEX_DASHBOARD_PORT="${CONVEX_DASHBOARD_PORT:-6791}"
 CONVEX_DATA_DIR="${CONVEX_DATA_DIR:-/data/convex}"
 CONVEX_INSTANCE_NAME="${CONVEX_INSTANCE_NAME:-mission-control}"
+CONVEX_INSTANCE_SECRET="${CONVEX_INSTANCE_SECRET:-1eb23bc8d083299294c50f21880f3bc8d083299294c50f21880f3bc8d0832992}"
 
 # DingTalk settings
 DINGTALK_CLIENT_ID="${DINGTALK_CLIENT_ID:-ding4iqz6zneluw2gyts}"
@@ -478,10 +479,13 @@ fi
 echo "[INFO] Starting Convex Backend on port ${CONVEX_BACKEND_PORT}"
 mkdir -p "${CONVEX_DATA_DIR}"
 cd /opt/convex-backend
+# Convex requires UTC timezone, unset TZ env var
+unset TZ
 ./convex-local-backend \
   --port "${CONVEX_BACKEND_PORT}" \
   --site-proxy-port "${CONVEX_SITE_PORT}" \
   --instance-name "${CONVEX_INSTANCE_NAME}" \
+  --instance-secret "${CONVEX_INSTANCE_SECRET}" \
   --local-storage "${CONVEX_DATA_DIR}" &
 PID_CONVEX=$!
 

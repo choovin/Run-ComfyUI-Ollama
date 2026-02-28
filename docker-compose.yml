@@ -14,14 +14,17 @@ services:
   runnode-llamacpp-opencode:
     container_name: runnode-llamacpp-opencode
     restart: unless-stopped
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        http_proxy: ${HTTP_PROXY_URL:-}
-        https_proxy: ${HTTP_PROXY_URL:-}
-        HTTP_PROXY: ${HTTP_PROXY_URL:-}
-        HTTPS_PROXY: ${HTTP_PROXY_URL:-}
+    # Use remote image from GitHub Actions build instead of local build
+    # Using the latest locally available image with OpenClaw config fixes
+    image: registry.cn-shenzhen.aliyuncs.com/sailfish/runnode-llamacpp-glm47-opencode:v20260228-llamacpp-opencode-openclaw-r33-llamacpp-opencode-1.2.15-manager-v0.9.04-llamacpp-opencode-1.2.15-manager-v0.9.04
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    #   args:
+    #     http_proxy: ${HTTP_PROXY_URL:-}
+    #     https_proxy: ${HTTP_PROXY_URL:-}
+    #     HTTP_PROXY: ${HTTP_PROXY_URL:-}
+    #     HTTPS_PROXY: ${HTTP_PROXY_URL:-}
     # Requires NVIDIA Container Toolkit on the host
     deploy:
       resources:
@@ -54,6 +57,8 @@ services:
       - ${MODEL_MOUNT_PATH:-/data/sailfish/vllm-ollama/ollama_data/models}:/models
       # Workspace 挂载
       - ${WORKSPACE_MOUNT_PATH:-/data/sailfish/vllm-ollama/workspace}/${HELM_RELEASE_NAME:-runnode}:/workspace
+      # 挂载本地 start.sh（包含 Convex 修复）
+      - ./start.sh:/start.sh:ro
       # OpenClaw 配置挂载（注释掉，让 start.sh 生成配置）
       # - ${OPENCLAW_MOUNT_PATH:-/data/sailfish/vllm-ollama/openclaw-config}/${HELM_RELEASE_NAME:-runnode}:/root/.openclaw
 
@@ -137,6 +142,7 @@ services:
       CONVEX_DASHBOARD_PORT: ${CONVEX_DASHBOARD_PORT:-6791}
       CONVEX_DATA_DIR: ${CONVEX_DATA_DIR:-/data/convex}
       CONVEX_INSTANCE_NAME: ${CONVEX_INSTANCE_NAME:-mission-control}
+      CONVEX_INSTANCE_SECRET: ${CONVEX_INSTANCE_SECRET:-1eb23bc8d083299294c50f21880f3bc8d083299294c50f21880f3bc8d0832992}
       CONVEX_SELF_HOSTED_URL: ${CONVEX_SELF_HOSTED_URL:-http://127.0.0.1:3210}
       CONVEX_SELF_HOSTED_ADMIN_KEY: ${CONVEX_SELF_HOSTED_ADMIN_KEY:-}
 
