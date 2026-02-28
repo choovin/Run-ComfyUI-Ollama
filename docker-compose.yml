@@ -35,7 +35,9 @@ services:
               capabilities: [gpu]
 
     ports:
-      # llama.cpp
+      # vLLM (when INFERENCE_ENGINE=vllm)
+      - "${PORT_VLLM:-8000}:8000"
+      # llama.cpp (when INFERENCE_ENGINE=llamacpp)
       - "${PORT_LLAMA:-8080}:8080"
       # OpenCode Manager
       - "${PORT_OPENCODE_MGR:-5003}:5003"
@@ -74,15 +76,20 @@ services:
       NO_PROXY: ${NO_PROXY_LIST:-bytepiping-storage.bytebroad.com,bytepiping-storage.bytebroad.com.cn,localhost,127.0.0.1,::1,.svc,.svc.cluster.local,169.254.169.254}
 
       # ========== 模型选择 ==========
-      # 支持：glm5 / glm47flash / minimax25 / kimi25
+      # 支持：glm5 / glm47flash / minimax25 / kimi25 / step35
       MODEL_PRESET: ${MODEL_PRESET:-glm47flash}
       GPU_PROFILE: ${GPU_PROFILE:-35g}
+
+      # ========== 推理引擎选择 ==========
+      # 支持: llama.cpp (默认), vllm
+      INFERENCE_ENGINE: ${INFERENCE_ENGINE:-llamacpp}
 
       # 模型路径（根据 MODEL_PRESET 选择对应的路径）
       MODEL_PATH_GLM5: ${MODEL_PATH_GLM5:-}
       MODEL_PATH_GLM47FLASH: ${MODEL_PATH_GLM47FLASH:-/models/downloads/glm47flash/GLM-4.7-Flash-Q4_K_M.gguf}
       MODEL_PATH_MINIMAX25: ${MODEL_PATH_MINIMAX25:-}
       MODEL_PATH_KIMI25: ${MODEL_PATH_KIMI25:-}
+      MODEL_PATH_STEP35: ${MODEL_PATH_STEP35:-}
 
       # ========== 模型自动下载 ==========
       MODEL_AUTO_DOWNLOAD: ${MODEL_AUTO_DOWNLOAD:-true}
@@ -102,6 +109,17 @@ services:
       LLAMACPP_THREADS: ${LLAMACPP_THREADS:-8}
       LLAMACPP_PARALLEL: ${LLAMACPP_PARALLEL:-1}
       LLAMACPP_EXTRA_ARGS: ${LLAMACPP_EXTRA_ARGS:---cache-type-k q8_0 --cache-type-v q8_0}
+
+      # ========== vLLM 参数 ==========
+      VLLM_HOST: ${VLLM_HOST:-0.0.0.0}
+      VLLM_PORT: ${VLLM_PORT:-8000}
+      VLLM_MODEL_PATH: ${VLLM_MODEL_PATH:-}
+      VLLM_MODEL_HF_ID: ${VLLM_MODEL_HF_ID:-}
+      VLLM_TENSOR_PARALLEL_SIZE: ${VLLM_TENSOR_PARALLEL_SIZE:-1}
+      VLLM_GPU_MEMORY_UTILIZATION: ${VLLM_GPU_MEMORY_UTILIZATION:-0.9}
+      VLLM_MAX_NUM_SEQS: ${VLLM_MAX_NUM_SEQS:-256}
+      VLLM_MAX_MODEL_LEN: ${VLLM_MAX_MODEL_LEN:-32768}
+      VLLM_EXTRA_ARGS: ${VLLM_EXTRA_ARGS:-}
 
       # ========== OpenCode Manager 参数 ==========
       OPENCODE_HOST: ${OPENCODE_HOST:-127.0.0.1}

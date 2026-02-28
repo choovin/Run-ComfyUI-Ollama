@@ -129,6 +129,18 @@ RUN set -eux; \
     cp /workspace/config/auth-profiles.json /root/.openclaw/agents/main/agent/auth-profiles.json; \
     chmod -R 755 /root/.openclaw
 
+# Install vLLM (optional, for Step 3.5 and other models)
+ARG VLLM_VERSION=0.8.3
+RUN set -eux; \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+      python3-pip; \
+    pip3 install --no-cache-dir \
+      vllm==${VLLM_VERSION} \
+      --extra-index-url https://wheels.vllm.ai/v1.0.0 \
+      --extra-index-url https://download.pytorch.org/whl/cu124 || true; \
+    rm -rf /var/lib/apt/lists/*
+
 # Install locale and configure UTF-8
 RUN apt-get update && \
     apt-get install -y locales && \
@@ -147,7 +159,7 @@ ENV DINGTALK_ALLOWED_USERS=${DINGTALK_ALLOWED_USERS:-*}
 
 COPY --chmod=755 start.sh /start.sh
 
-# llama.cpp + OpenCode Manager + OpenCode Server + OpenClaw + Mission Control + Convex Backend
-EXPOSE 8080 5003 5551 3000 18789 3210 3211 6791
+# llama.cpp / vLLM + OpenCode Manager + OpenCode Server + OpenClaw + Mission Control + Convex Backend
+EXPOSE 8000 8080 5003 5551 3000 18789 3210 3211 6791
 
 ENTRYPOINT ["/start.sh"]
