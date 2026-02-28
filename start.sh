@@ -481,9 +481,8 @@ cd /opt/convex-backend
 ./convex-local-backend \
   --port "${CONVEX_BACKEND_PORT}" \
   --site-proxy-port "${CONVEX_SITE_PORT}" \
-  --dashboard-port "${CONVEX_DASHBOARD_PORT}" \
   --instance-name "${CONVEX_INSTANCE_NAME}" \
-  --data-dir "${CONVEX_DATA_DIR}" &
+  --local-storage "${CONVEX_DATA_DIR}" &
 PID_CONVEX=$!
 
 # Wait for Convex Backend to be ready
@@ -516,7 +515,7 @@ if [[ "${convex_ready}" != "1" ]]; then
     exit 1
 fi
 echo "[INFO] Convex Backend ready: http://127.0.0.1:${CONVEX_BACKEND_PORT}"
-echo "[INFO] Convex Dashboard: http://127.0.0.1:${CONVEX_DASHBOARD_PORT}"
+# Note: Dashboard is served at the same port as the backend for convex-local-backend
 
 # Generate admin key for Convex
 # Note: convex-local-backend generates a deterministic key based on instance name
@@ -629,7 +628,6 @@ echo "[INFO] OpenCode Manager:     http://127.0.0.1:${OPENCODE_MANAGER_PORT}"
 echo "[INFO] Opencode Server:      http://127.0.0.1:${OPENCODE_SERVER_PORT}"
 echo "[INFO] OpenClaw Gateway:     http://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
 echo "[INFO] Convex Backend:       http://127.0.0.1:${CONVEX_BACKEND_PORT}"
-echo "[INFO] Convex Dashboard:     http://127.0.0.1:${CONVEX_DASHBOARD_PORT}"
 if [[ -n "${PID_MC_FRONTEND}" ]] && kill -0 "${PID_MC_FRONTEND}" 2>/dev/null; then
     echo "[INFO] Mission Control:      http://127.0.0.1:${OPENCLAW_MISSION_CONTROL_PORT}"
 fi
