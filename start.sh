@@ -45,11 +45,12 @@ OPENCLAW_STARTUP_TIMEOUT_SEC="${OPENCLAW_STARTUP_TIMEOUT_SEC:-60}"
 # OpenClaw Mission Control settings
 OPENCLAW_MISSION_CONTROL_PORT="${OPENCLAW_MISSION_CONTROL_PORT:-3000}"
 OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC="${OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC:-60}"
+# Vite preview allowed hosts (comma-separated, or "*" for all)
+OPENCLAW_MC_ALLOWED_HOSTS="${OPENCLAW_MC_ALLOWED_HOSTS:-}"
 
 # Convex Backend settings
 CONVEX_BACKEND_PORT="${CONVEX_BACKEND_PORT:-3210}"
 CONVEX_SITE_PORT="${CONVEX_SITE_PORT:-3211}"
-CONVEX_DASHBOARD_PORT="${CONVEX_DASHBOARD_PORT:-6791}"
 CONVEX_DATA_DIR="${CONVEX_DATA_DIR:-/data/convex}"
 CONVEX_INSTANCE_NAME="${CONVEX_INSTANCE_NAME:-mission-control}"
 CONVEX_INSTANCE_SECRET="${CONVEX_INSTANCE_SECRET:-1eb23bc8d083299294c50f21880f3bc8d083299294c50f21880f3bc8d0832992}"
@@ -545,12 +546,22 @@ fi
 
 # Start frontend server
 # Check if built output exists
+# Build Vite preview allowed hosts argument
+MC_PREVIEW_ARGS="--port ${OPENCLAW_MISSION_CONTROL_PORT} --host 0.0.0.0"
+if [[ -n "${OPENCLAW_MC_ALLOWED_HOSTS}" ]]; then
+    # Vite 6+ supports --allowed-hosts CLI option
+    MC_PREVIEW_ARGS="${MC_PREVIEW_ARGS} --allowed-hosts ${OPENCLAW_MC_ALLOWED_HOSTS}"
+fi
+
 if [ -d ".next" ] || [ -d "dist" ]; then
     echo "[INFO] Starting Mission Control frontend..."
-    pnpm preview --port "${OPENCLAW_MISSION_CONTROL_PORT}" --host 0.0.0.0 &
+    # Export VITE_ALLOWED_HOSTS for Vite to pick up
+    export VITE_ALLOWED_HOSTS="${OPENCLAW_MC_ALLOWED_HOSTS:-*}"
+    pnpm preview ${MC_PREVIEW_ARGS} &
     PID_MC_FRONTEND=$!
 else
     echo "[WARN] Mission Control not built, attempting to start dev server..."
+    export VITE_ALLOWED_HOSTS="${OPENCLAW_MC_ALLOWED_HOSTS:-*}"
     pnpm dev --port "${OPENCLAW_MISSION_CONTROL_PORT}" --host 0.0.0.0 &
     PID_MC_FRONTEND=$!
 fi
