@@ -70,6 +70,10 @@ RUN set -eux; \
     mv /root/.opencode /opt/opencode; \
     chmod -R 755 /opt/opencode; \
     ln -sf /opt/opencode/bin/opencode /usr/local/bin/opencode; \
+    # Install code-server (placed here since it doesn't change often, enables faster rebuilds) \
+    curl -fsSL https://code-server.dev/install.sh | sh; \
+    # Install opencode plugin for code-server via VSCode Marketplace \
+    code-server --install-extension sst-dev.opencode --force || true; \
     # 克隆 OpenCode Manager
     if [ -n "${OPENCODE_MANAGER_REF}" ]; then \
       git clone --depth 1 --branch "${OPENCODE_MANAGER_REF}" https://github.com/chriswritescode-dev/opencode-manager.git /opt/opencode-manager; \
@@ -129,19 +133,23 @@ RUN set -eux; \
     cp /workspace/config/auth-profiles.json /root/.openclaw/agents/main/agent/auth-profiles.json; \
     chmod -R 755 /root/.openclaw
 
-# Install vLLM and SGLang (optional, for Step 3.5, Qwen3.5 and other models)
+# Install vLLM (nightly for Step3.5 support) and SGLang (latest from git)
 # Note: Current environment uses CUDA 12.9, using cu129 for best compatibility
-ARG VLLM_VERSION=0.8.3
-ARG SGLANG_VERSION=0.4.1
+ARG VLLM_VERSION=0.16.1.dev
 RUN set -eux; \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-      python3-pip; \
+      python3-pip \
+      python3-venv; \
+    # Install uv package manager \
+    pip3 install --no-cache-dir uv; \
+    # Install vLLM nightly (for Step3.5 support) \
     pip3 install --no-cache-dir \
       vllm==${VLLM_VERSION} \
-      sglang==${SGLANG_VERSION} \
-      --extra-index-url https://wheels.vllm.ai/v1.0.0 \
+      --extra-index-url https://wheels.vllm.ai/nightly \
       --extra-index-url https://download.pytorch.org/whl/cu129 || true; \
+    # Install SGLang latest from git (official recommended method) \
+    uv pip install --system 'git+https://github.com/sgl-project/sglang.git#subdirectory=python&egg=sglang[all]' || true; \
     rm -rf /var/lib/apt/lists/*
 
 # Install locale and configure UTF-8
@@ -160,9 +168,16 @@ ENV DINGTALK_CLIENT_ID=${DINGTALK_CLIENT_ID:-ding4iqz6zneluw2gyts}
 ENV DINGTALK_CLIENT_SECRET=${DINGTALK_CLIENT_SECRET:-key-9b1c8e5a-9c3d-4f1e-8b2a-1234567890ab}
 ENV DINGTALK_ALLOWED_USERS=${DINGTALK_ALLOWED_USERS:-*}
 
+# Generate git commit file for runtime diagnostics
+RUN if command -v git >/dev/null 2>&1 && [[ -d /workspace/.git ]]; then \
+      git -C /workspace rev-parse HEAD > /workspace/.git_commit; \
+    else \
+      echo "unknown" > /workspace/.git_commit; \
+    fi
+
 COPY --chmod=755 start.sh /start.sh
 
-# llama.cpp / vLLM / SGLang + OpenCode Manager + OpenCode Server + OpenClaw + Mission Control + Convex Backend
-EXPOSE 8000 8001 8080 5003 5551 3000 18789 3210 3211 6791
+# llama.cpp / vLLM / SGLang + OpenCode Manager + OpenCode Server + OpenClaw + Mission Control + Convex Backend + Code-Server
+EXPOSE 8000 8001 8080 5003 5551 3000 18789 3210 3211 6791 9000
 
 ENTRYPOINT ["/start.sh"]

@@ -3,6 +3,137 @@ set -euo pipefail
 
 echo "[INFO] Starting services: llama.cpp + OpenCode Manager + OpenClaw + Mission Control"
 
+# ==================== System & Environment Diagnostics ====================
+echo "[INFO] =========================================="
+echo "[INFO] 🚀 Container Startup Diagnostics"
+echo "[INFO] =========================================="
+
+# Git Commit Info (for build verification)
+echo "[INFO] --- Build Info ---"
+if [[ -f /workspace/.git_commit ]]; then
+    GIT_COMMIT=$(cat /workspace/.git_commit 2>/dev/null || echo "unknown")
+elif command -v git >/dev/null 2>&1 && [[ -d /workspace/.git ]]; then
+    GIT_COMMIT=$(git -C /workspace rev-parse HEAD 2>/dev/null | cut -c1-8 || echo "unknown")
+else
+    GIT_COMMIT="unknown"
+fi
+echo "[INFO] 📦 Git Commit: ${GIT_COMMIT:-unknown}"
+
+# OS Info
+echo "[INFO] --- System Info ---"
+if [[ -f /etc/os-release ]]; then
+    source /etc/os-release
+    echo "[INFO] 🖥️  OS: ${PRETTY_NAME:-Linux}"
+else
+    echo "[INFO] 🖥️  OS: Linux (details unavailable)"
+fi
+echo "[INFO] 🕐 Start Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+echo "[INFO] 🐳 Container ID: ${HOSTNAME:-unknown}"
+
+# GPU Info
+echo "[INFO] --- GPU Info ---"
+if command -v nvidia-smi >/dev/null 2>&1; then
+    GPU_COUNT=$(nvidia-smi --list-gpus | wc -l)
+    echo "[INFO] 🎮 GPU Count: ${GPU_COUNT}"
+    nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader 2>/dev/null | while read -r line; do
+        # Handle "Insufficient Permissions" for memory info
+        if [[ "${line}" == *"[Insufficient Permissions]"* ]]; then
+            GPU_NAME=$(echo "${line}" | cut -d',' -f1)
+            echo "[INFO]    GPU: ${GPU_NAME} (memory info restricted)"
+        else
+            echo "[INFO]    GPU: ${line}"
+        fi
+    done
+    # Try to get CUDA version
+    CUDA_VERSION=$(nvidia-smi | grep "CUDA Version:" | sed 's/.*CUDA Version: *//' | cut -d' ' -f1 || echo "unknown")
+    if [[ "${CUDA_VERSION}" != "unknown" ]]; then
+        echo "[INFO]    CUDA: ${CUDA_VERSION}"
+    fi
+else
+    echo "[INFO] 🎮 GPU: Not detected"
+fi
+
+# Python & AI Framework Versions
+echo "[INFO] --- AI Components ---"
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON_VERSION=$(python3 --version 2>&1)
+    echo "[INFO] 🐍 Python: ${PYTHON_VERSION}"
+    
+    # vLLM
+    if python3 -c "import vllm" 2>/dev/null; then
+        VLLM_VERSION=$(python3 -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "unknown")
+        echo "[INFO] 🔥 vLLM: ${VLLM_VERSION}"
+    else
+        echo "[INFO] 🔥 vLLM: Not installed"
+    fi
+    
+    # SGLang
+    if python3 -c "import sglang" 2>/dev/null; then
+        SGLANG_VERSION=$(python3 -c "import sglang; print(sglang.__version__)" 2>/dev/null || echo "unknown")
+        echo "[INFO] 🌐 SGLang: ${SGLANG_VERSION}"
+    else
+        echo "[INFO] 🌐 SGLang: Not installed"
+    fi
+fi
+
+# llama.cpp
+echo "[INFO] --- Inference Engine ---"
+if command -v llama-server >/dev/null 2>&1; then
+    LLAMA_VERSION=$(llama-server --version 2>&1 | grep -oP 'version: \K\d+' | head -1 || echo "unknown")
+    LLAMA_COMMIT=$(llama-server --version 2>&1 | grep -oP '\(\K[0-9a-f]+' | head -1 || echo "unknown")
+    if [[ "${LLAMA_VERSION}" != "unknown" ]]; then
+        echo "[INFO] 🦙 llama.cpp: v${LLAMA_VERSION} (${LLAMA_COMMIT})"
+    else
+        echo "[INFO] 🦙 llama.cpp: $(llama-server --version 2>&1 | head -1 | xargs || echo "unknown")"
+    fi
+elif [[ -x "/app/llama-server" ]]; then
+    LLAMA_VERSION=$("/app/llama-server" --version 2>&1 | grep -oP 'version: \K\d+' | head -1 || echo "unknown")
+    LLAMA_COMMIT=$("/app/llama-server" --version 2>&1 | grep -oP '\(\K[0-9a-f]+' | head -1 || echo "unknown")
+    if [[ "${LLAMA_VERSION}" != "unknown" ]]; then
+        echo "[INFO] 🦙 llama.cpp: v${LLAMA_VERSION} (${LLAMA_COMMIT})"
+    else
+        echo "[INFO] 🦙 llama.cpp: $(/app/llama-server --version 2>&1 | head -1 | xargs || echo "unknown")"
+    fi
+else
+    echo "[INFO] 🦙 llama.cpp: Not found"
+fi
+
+# OpenCode
+echo "[INFO] --- Additional Tools ---"
+if command -v opencode >/dev/null 2>&1; then
+    OPENCODE_VERSION=$(opencode --version 2>&1 | head -n1 || echo "unknown")
+    echo "[INFO] 🤖 OpenCode: ${OPENCODE_VERSION}"
+else
+    echo "[INFO] 🤖 OpenCode: Not found"
+fi
+
+if command -v code-server >/dev/null 2>&1; then
+    CODE_SERVER_VERSION=$(code-server --version 2>&1 | head -n1 || echo "unknown")
+    echo "[INFO] 📝 code-server: ${CODE_SERVER_VERSION}"
+else
+    echo "[INFO] 📝 code-server: Not found"
+fi
+
+# Node.js & Bun
+if command -v node >/dev/null 2>&1; then
+    NODE_VERSION=$(node --version 2>&1)
+    echo "[INFO] 📦 Node.js: ${NODE_VERSION}"
+fi
+
+if command -v bun >/dev/null 2>&1; then
+    BUN_VERSION=$(bun --version 2>&1)
+    echo "[INFO] 🧊 Bun: ${BUN_VERSION}"
+fi
+
+if command -v pnpm >/dev/null 2>&1; then
+    PNPM_VERSION=$(pnpm --version 2>&1)
+    echo "[INFO] 📐 pnpm: ${PNPM_VERSION}"
+fi
+
+echo "[INFO] =========================================="
+echo "[INFO] ✅ Diagnostics Complete"
+echo "[INFO] =========================================="
+
 # Ensure llama.cpp runtime shared libraries can be resolved.
 # Some upstream images place llama-server and its .so files under /app.
 export LD_LIBRARY_PATH="/app:/opt/llama/bin:/usr/local/lib:${LD_LIBRARY_PATH:-}"
@@ -59,6 +190,12 @@ CONVEX_INSTANCE_SECRET="${CONVEX_INSTANCE_SECRET:-1eb23bc8d083299294c50f21880f3b
 DINGTALK_CLIENT_ID="${DINGTALK_CLIENT_ID:-ding4iqz6zneluw2gyts}"
 DINGTALK_CLIENT_SECRET="${DINGTALK_CLIENT_SECRET:-0eUE-rEvcQC1-vyW5e4vxvQDovEH0SHByNGH0vsy1SGirfjwNWG-9VsiPV0mlBrz}"
 DINGTALK_ALLOWED_USERS="${DINGTALK_ALLOWED_USERS:-*}"
+
+# Code-Server settings
+CODE_SERVER_HOST="${CODE_SERVER_HOST:-0.0.0.0}"
+CODE_SERVER_PORT="${CODE_SERVER_PORT:-9000}"
+CODE_SERVER_PASSWORD="${CODE_SERVER_PASSWORD:-}"
+CODE_SERVER_WORKSPACE="${CODE_SERVER_WORKSPACE:-/workspace}"
 
 # Model selection (GGUF) via preset + per-model path env vars.
 MODEL_PRESET="${MODEL_PRESET:-${LLAMACPP_MODEL_PRESET:-minimax25}}"
@@ -510,6 +647,7 @@ cleanup() {
     if [[ -n "${PID_CONVEX:-}" ]]; then kill "${PID_CONVEX}" 2>/dev/null || true; fi
     if [[ -n "${PID_OPENCLAW_GATEWAY:-}" ]]; then kill "${PID_OPENCLAW_GATEWAY}" 2>/dev/null || true; fi
     if [[ -n "${PID_MANAGER:-}" ]]; then kill "${PID_MANAGER}" 2>/dev/null || true; fi
+    if [[ -n "${PID_CODE_SERVER:-}" ]]; then kill "${PID_CODE_SERVER}" 2>/dev/null || true; fi
     if [[ -n "${PID_LLAMA:-}" ]]; then kill "${PID_LLAMA}" 2>/dev/null || true; fi
     wait || true
     exit "${code}"
@@ -529,6 +667,31 @@ export AUTH_SECURE_COOKIES
 export OPENCODE_HOST
 export OPENCODE_SERVER_PORT
 mkdir -p "$(dirname "${DATABASE_PATH}")"
+
+# Start code-server (HTTP port 9000)
+echo "[INFO] Starting code-server on ${CODE_SERVER_HOST}:${CODE_SERVER_PORT}"
+
+if [[ -n "${CODE_SERVER_PASSWORD}" ]]; then
+    code-server "${CODE_SERVER_WORKSPACE}" \
+        --auth password \
+        --bind-addr "${CODE_SERVER_HOST}:${CODE_SERVER_PORT}" \
+        --disable-update-check \
+        --disable-telemetry \
+        --host "${CODE_SERVER_HOST}" &
+else
+    echo "[WARN] CODE_SERVER_PASSWORD not set, starting without authentication"
+    code-server "${CODE_SERVER_WORKSPACE}" \
+        --bind-addr "${CODE_SERVER_HOST}:${CODE_SERVER_PORT}" \
+        --disable-update-check \
+        --disable-telemetry \
+        --host "${CODE_SERVER_HOST}" &
+fi
+
+PID_CODE_SERVER=$!
+echo "[INFO] code-server started in background: http://${CODE_SERVER_HOST}:${CODE_SERVER_PORT}"
+
+# Wait a bit for code-server to start
+sleep 2
 
 # Start OpenCode Manager
 echo "[INFO] Starting OpenCode Manager on ${OPENCODE_MANAGER_HOST}:${OPENCODE_MANAGER_PORT}"
@@ -745,6 +908,7 @@ else
 fi
 echo "[INFO] OpenCode Manager:     http://127.0.0.1:${OPENCODE_MANAGER_PORT}"
 echo "[INFO] Opencode Server:      http://127.0.0.1:${OPENCODE_SERVER_PORT}"
+echo "[INFO] Code-Server:          http://127.0.0.1:${CODE_SERVER_PORT}"
 echo "[INFO] OpenClaw Gateway:     http://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
 echo "[INFO] Convex Backend:       http://127.0.0.1:${CONVEX_BACKEND_PORT}"
 if [[ -n "${PID_MC_FRONTEND}" ]] && kill -0 "${PID_MC_FRONTEND}" 2>/dev/null; then
