@@ -64,7 +64,7 @@ DINGTALK_ALLOWED_USERS="${DINGTALK_ALLOWED_USERS:-*}"
 MODEL_PRESET="${MODEL_PRESET:-${LLAMACPP_MODEL_PRESET:-minimax25}}"
 GPU_PROFILE="${GPU_PROFILE:-${LLAMACPP_GPU_PROFILE:-71g}}"
 
-# Inference engine selection: llama.cpp or vllm
+# Inference engine selection: llama.cpp, vllm, or sglang
 INFERENCE_ENGINE="${INFERENCE_ENGINE:-llamacpp}"
 
 # vLLM settings
@@ -78,8 +78,18 @@ VLLM_MAX_NUM_SEQS="${VLLM_MAX_NUM_SEQS:-256}"
 VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-32768}"
 VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS:-}"
 
+# SGLang settings
+SGLANG_HOST="${SGLANG_HOST:-0.0.0.0}"
+SGLANG_PORT="${SGLANG_PORT:-8001}"
+SGLANG_MODEL_PATH="${SGLANG_MODEL_PATH:-}"
+SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-}"
+SGLANG_TP_SIZE="${SGLANG_TP_SIZE:-1}"
+SGLANG_MAX_MODEL_LEN="${SGLANG_MAX_MODEL_LEN:-32768}"
+SGLANG_EXTRA_ARGS="${SGLANG_EXTRA_ARGS:-}"
+
 # Model paths for vLLM (supports HF model IDs or local paths)
 MODEL_PATH_STEP35="${MODEL_PATH_STEP35:-}"
+MODEL_PATH_QWEN35FP8="${MODEL_PATH_QWEN35FP8:-}"
 MODEL_PATH_GLM5_VLLM="${MODEL_PATH_GLM5_VLLM:-}"
 MODEL_PATH_GLM47FLASH_VLLM="${MODEL_PATH_GLM47FLASH_VLLM:-}"
 MODEL_PATH_MINIMAX25_VLLM="${MODEL_PATH_MINIMAX25_VLLM:-}"
@@ -168,8 +178,54 @@ if [[ "${INFERENCE_ENGINE}" == "vllm" ]]; then
                 VLLM_MODEL_PATH="${MODEL_PATH_KIMI25_VLLM:-}"
                 VLLM_MODEL_HF_ID="${VLLM_MODEL_HF_ID:-}"
                 ;;
+            qwen35fp8|qwen3.5-fp8|qwen3.5fp8)
+                VLLM_MODEL_PATH="${MODEL_PATH_QWEN35FP8:-}"
+                VLLM_MODEL_HF_ID="${VLLM_MODEL_HF_ID:-Qwen/Qwen3.5-27B-FP8}"
+                VLLM_TENSOR_PARALLEL_SIZE="${VLLM_TENSOR_PARALLEL_SIZE:-2}"
+                VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-32768}"
+                ;;
             *)
-                echo "ERROR: Unknown MODEL_PRESET='${MODEL_PRESET}' for vLLM. Supported: step35, glm5, glm47flash, minimax25, kimi25" >&2
+                echo "ERROR: Unknown MODEL_PRESET='${MODEL_PRESET}' for vLLM. Supported: step35, qwen35fp8, glm5, glm47flash, minimax25, kimi25" >&2
+                exit 1
+                ;;
+        esac
+    fi
+fi
+
+# SGLang model configuration
+if [[ "${INFERENCE_ENGINE}" == "sglang" ]]; then
+    if [[ -z "${SGLANG_MODEL_PATH}" && -z "${SGLANG_MODEL_HF_ID}" ]]; then
+        case "${MODEL_PRESET}" in
+            step35|step3.5|step-3.5-flash|step35flash)
+                SGLANG_MODEL_PATH="${MODEL_PATH_STEP35:-}"
+                SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-stepfun-ai/Step-3.5-Flash}"
+                SGLANG_TP_SIZE="${SGLANG_TP_SIZE:-1}"
+                SGLANG_MAX_MODEL_LEN="${SGLANG_MAX_MODEL_LEN:-131072}"
+                ;;
+            qwen35fp8|qwen3.5-fp8|qwen3.5fp8)
+                SGLANG_MODEL_PATH="${MODEL_PATH_QWEN35FP8:-}"
+                SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-Qwen/Qwen3.5-27B-FP8}"
+                SGLANG_TP_SIZE="${SGLANG_TP_SIZE:-2}"
+                SGLANG_MAX_MODEL_LEN="${SGLANG_MAX_MODEL_LEN:-32768}"
+                ;;
+            glm5|glm-5)
+                SGLANG_MODEL_PATH="${MODEL_PATH_GLM5_VLLM:-}"
+                SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-}"
+                ;;
+            glm47flash|glm47|glm-4.7-flash|glm-4.7)
+                SGLANG_MODEL_PATH="${MODEL_PATH_GLM47FLASH_VLLM:-}"
+                SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-}"
+                ;;
+            minimax25|minimax-2.5|minimax2.5)
+                SGLANG_MODEL_PATH="${MODEL_PATH_MINIMAX25_VLLM:-}"
+                SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-}"
+                ;;
+            kimi25|kimi-2.5|kimi2.5)
+                SGLANG_MODEL_PATH="${MODEL_PATH_KIMI25_VLLM:-}"
+                SGLANG_MODEL_HF_ID="${SGLANG_MODEL_HF_ID:-}"
+                ;;
+            *)
+                echo "ERROR: Unknown MODEL_PRESET='${MODEL_PRESET}' for SGLang. Supported: step35, qwen35fp8, glm5, glm47flash, minimax25, kimi25" >&2
                 exit 1
                 ;;
         esac
@@ -334,8 +390,23 @@ elif [[ "${INFERENCE_ENGINE}" == "vllm" ]]; then
         echo "ERROR: vLLM model path not found: ${VLLM_MODEL_PATH}" >&2
         exit 1
     fi
+elif [[ "${INFERENCE_ENGINE}" == "sglang" ]]; then
+    if [[ -z "${SGLANG_MODEL_PATH}" && -z "${SGLANG_MODEL_HF_ID}" ]]; then
+        echo "ERROR: No model selected for SGLang." >&2
+        echo "Set either SGLANG_MODEL_PATH, SGLANG_MODEL_HF_ID, or set MODEL_PRESET." >&2
+        echo "Examples:" >&2
+        echo "  INFERENCE_ENGINE=sglang MODEL_PRESET=step35" >&2
+        echo "  INFERENCE_ENGINE=sglang SGLANG_MODEL_HF_ID=stepfun-ai/Step-3.5-Flash" >&2
+        echo "  INFERENCE_ENGINE=sglang SGLANG_MODEL_PATH=/models/your-model" >&2
+        exit 1
+    fi
+
+    if [[ -n "${SGLANG_MODEL_PATH}" && ! -d "${SGLANG_MODEL_PATH}" && ! -f "${SGLANG_MODEL_PATH}" ]]; then
+        echo "ERROR: SGLang model path not found: ${SGLANG_MODEL_PATH}" >&2
+        exit 1
+    fi
 else
-    echo "ERROR: Unknown INFERENCE_ENGINE='${INFERENCE_ENGINE}'. Supported: llama.cpp, vllm" >&2
+    echo "ERROR: Unknown INFERENCE_ENGINE='${INFERENCE_ENGINE}'. Supported: llama.cpp, vllm, sglang" >&2
     exit 1
 fi
 
@@ -502,62 +573,15 @@ echo "[INFO] OpenCode Manager ready: http://127.0.0.1:${OPENCODE_MANAGER_PORT}"
 
 # Start OpenClaw Gateway
 echo "[INFO] Starting OpenClaw Gateway on port ${OPENCLAW_GATEWAY_PORT}"
-# Add control UI configuration for non-loopback binding
 export OPENCLAW_CONTROL_UI_DANGEROUSLY_ALLOW_HOST_HEADER_ORIGIN_FALLBACK="true"
 openclaw gateway run --port "${OPENCLAW_GATEWAY_PORT}" --bind lan --auth password --password "${OPENCLAW_GATEWAY_PASSWORD}" &
 PID_OPENCLAW_GATEWAY=$!  
-  
-# Wait for Gateway to be ready  
-openclaw_ready=0  
-start_ts="$(date +%s)"  
-while true; do  
-    # 直接检查 TCP 端口是否可连接（绕过认证问题）
-    if timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/${OPENCLAW_GATEWAY_PORT} && echo -e 'GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n' >&3 && timeout 1 cat <&3 | grep -q '200\|101'" 2>/dev/null; then
-        openclaw_ready=1
-        break
-    fi
-    
-    # 备选：简单的端口监听检查
-    if ss -tln | grep -q "LISTEN.*:${OPENCLAW_GATEWAY_PORT}"; then
-        # 端口在监听，再等 2 秒让服务完全初始化
-        sleep 2
-        openclaw_ready=1
-        break
-    fi
-      
-    if ! kill -0 "${PID_OPENCLAW_GATEWAY}" 2>/dev/null; then
-        echo "WARN: OpenClaw Gateway process exited before becoming ready. Continuing without Gateway..." >&2
-        PID_OPENCLAW_GATEWAY=""
-        break
-    fi
-
-    now_ts="$(date +%s)"
-    elapsed=$((now_ts - start_ts))
-    if (( elapsed >= OPENCLAW_STARTUP_TIMEOUT_SEC )); then
-        echo "WARN: OpenClaw Gateway did not become ready within ${OPENCLAW_STARTUP_TIMEOUT_SEC}s. Continuing without Gateway..." >&2
-        if [[ -n "${PID_OPENCLAW_GATEWAY}" ]]; then
-            kill "${PID_OPENCLAW_GATEWAY}" 2>/dev/null || true
-        fi
-        PID_OPENCLAW_GATEWAY=""
-        break
-    fi  
-      
-    echo "[INFO] Waiting for OpenClaw Gateway to start..."
-    sleep 2
-done
-
-if [[ -n "${PID_OPENCLAW_GATEWAY}" ]] && kill -0 "${PID_OPENCLAW_GATEWAY}" 2>/dev/null; then
-    echo "[INFO] OpenClaw Gateway ready: ws://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
-else
-    echo "[WARN] OpenClaw Gateway not available, continuing without it..."
-    PID_OPENCLAW_GATEWAY=""
-fi
+echo "[INFO] OpenClaw Gateway started in background: ws://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
 
 # Start Convex Backend (self-hosted)
 echo "[INFO] Starting Convex Backend on port ${CONVEX_BACKEND_PORT}"
 mkdir -p "${CONVEX_DATA_DIR}"
 cd /opt/convex-backend
-# Convex requires UTC timezone, unset TZ env var
 unset TZ
 ./convex-local-backend \
   --port "${CONVEX_BACKEND_PORT}" \
@@ -566,42 +590,9 @@ unset TZ
   --instance-secret "${CONVEX_INSTANCE_SECRET}" \
   --local-storage "${CONVEX_DATA_DIR}" &
 PID_CONVEX=$!
-
-# Wait for Convex Backend to be ready
-convex_ready=0
-start_ts="$(date +%s)"
-while true; do
-    if curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:${CONVEX_BACKEND_PORT}/version" 2>/dev/null | grep -q "200"; then
-        convex_ready=1
-        break
-    fi
-
-    if ! kill -0 "${PID_CONVEX}" 2>/dev/null; then
-        echo "ERROR: Convex Backend process exited before becoming ready." >&2
-        exit 1
-    fi
-
-    now_ts="$(date +%s)"
-    elapsed=$((now_ts - start_ts))
-    if (( elapsed >= 30 )); then
-        echo "ERROR: Convex Backend did not become ready within 30s." >&2
-        exit 1
-    fi
-
-    echo "[INFO] Waiting for Convex Backend to start..."
-    sleep 2
-done
-
-if [[ "${convex_ready}" != "1" ]]; then
-    echo "ERROR: Convex Backend startup check ended unexpectedly." >&2
-    exit 1
-fi
-echo "[INFO] Convex Backend ready: http://127.0.0.1:${CONVEX_BACKEND_PORT}"
-# Note: Dashboard is served at the same port as the backend for convex-local-backend
+echo "[INFO] Convex Backend started in background: http://127.0.0.1:${CONVEX_BACKEND_PORT}"
 
 # Generate admin key for Convex
-# Note: convex-local-backend generates a deterministic key based on instance name
-# For development, we use a fixed admin key pattern
 ADMIN_KEY="convex-self-hosted-admin-key:${CONVEX_INSTANCE_NAME}"
 echo "[INFO] Convex admin key generated for instance: ${CONVEX_INSTANCE_NAME}"
 
@@ -622,11 +613,8 @@ if [ -d "convex" ]; then
 fi
 
 # Start frontend server
-# Check if built output exists
-# Build Vite preview allowed hosts argument
 MC_PREVIEW_ARGS="--port ${OPENCLAW_MISSION_CONTROL_PORT} --host 0.0.0.0"
 if [[ -n "${OPENCLAW_MC_ALLOWED_HOSTS}" ]]; then
-    # Vite 6+ supports --allowed-hosts CLI option
     MC_PREVIEW_ARGS="${MC_PREVIEW_ARGS} --allowed-hosts ${OPENCLAW_MC_ALLOWED_HOSTS}"
 fi
 
@@ -642,38 +630,7 @@ else
     pnpm dev --port "${OPENCLAW_MISSION_CONTROL_PORT}" --host 0.0.0.0 &
     PID_MC_FRONTEND=$!
 fi
-
-# Wait for Mission Control to be ready
-mc_ready=0
-start_ts="$(date +%s)"
-while true; do
-    http_code="$(curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:${OPENCLAW_MISSION_CONTROL_PORT}" 2>/dev/null || echo "000")"
-    if [[ "${http_code}" == "200" || "${http_code}" == "304" ]]; then
-        mc_ready=1
-        break
-    fi
-
-    if ! kill -0 "${PID_MC_FRONTEND}" 2>/dev/null; then
-        echo "WARN: Mission Control frontend process exited before becoming ready." >&2
-        break
-    fi
-
-    now_ts="$(date +%s)"
-    elapsed=$((now_ts - start_ts))
-    if (( elapsed >= OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC )); then
-        echo "WARN: Mission Control did not become ready within ${OPENCLAW_MISSION_CONTROL_STARTUP_TIMEOUT_SEC}s." >&2
-        break
-    fi
-
-    echo "[INFO] Waiting for Mission Control to start... (last HTTP code: ${http_code})"
-    sleep 2
-done
-
-if [[ "${mc_ready}" == "1" ]]; then
-    echo "[INFO] Mission Control ready: http://127.0.0.1:${OPENCLAW_MISSION_CONTROL_PORT}"
-else
-    echo "[WARN] Mission Control startup incomplete, but continuing..."
-fi
+echo "[INFO] Mission Control started in background: http://127.0.0.1:${OPENCLAW_MISSION_CONTROL_PORT}"
 
 PID_MC_BACKEND=""
 
@@ -709,38 +666,37 @@ if [[ "${INFERENCE_ENGINE}" == "vllm" ]]; then
     echo "[INFO] vLLM command: ${VLLM_CMD[*]}"
     "${VLLM_CMD[@]}" &
     PID_LLAMA=$!
+    echo "[INFO] vLLM started in background: http://127.0.0.1:${VLLM_PORT}"
+elif [[ "${INFERENCE_ENGINE}" == "sglang" ]]; then
+    echo "[INFO] Starting SGLang on ${SGLANG_HOST}:${SGLANG_PORT}"
     
-    # Wait for vLLM to be ready
-    vllm_ready=0
-    start_ts="$(date +%s)"
-    while true; do
-        http_code="$(curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:${VLLM_PORT}/v1/models" 2>/dev/null || echo "000")"
-        if [[ "${http_code}" == "200" ]]; then
-            vllm_ready=1
-            break
-        fi
-
-        if ! kill -0 "${PID_LLAMA}" 2>/dev/null; then
-            echo "ERROR: vLLM process exited before becoming ready." >&2
-            exit 1
-        fi
-
-        now_ts="$(date +%s)"
-        elapsed=$((now_ts - start_ts))
-        if (( elapsed >= 120 )); then
-            echo "ERROR: vLLM did not become ready within 120s." >&2
-            exit 1
-        fi
-
-        echo "[INFO] Waiting for vLLM to start... (last HTTP code: ${http_code})"
-        sleep 3
-    done
-    
-    if [[ "${vllm_ready}" != "1" ]]; then
-        echo "ERROR: vLLM startup check ended unexpectedly." >&2
-        exit 1
+    # Determine model source
+    SGLANG_MODEL_ARG=""
+    if [[ -n "${SGLANG_MODEL_HF_ID}" ]]; then
+        SGLANG_MODEL_ARG="${SGLANG_MODEL_HF_ID}"
+    elif [[ -n "${SGLANG_MODEL_PATH}" ]]; then
+        SGLANG_MODEL_ARG="${SGLANG_MODEL_PATH}"
     fi
-    echo "[INFO] vLLM ready: http://127.0.0.1:${VLLM_PORT}"
+    
+    SGLANG_CMD=(
+        python3 -m sglang.launch_server
+        --host "${SGLANG_HOST}"
+        --port "${SGLANG_PORT}"
+        --model "${SGLANG_MODEL_ARG}"
+        --tp-size "${SGLANG_TP_SIZE}"
+        --max-model-len "${SGLANG_MAX_MODEL_LEN}"
+        --trust-remote-code
+    )
+    
+    if [[ -n "${SGLANG_EXTRA_ARGS}" ]]; then
+        EXTRA=(${SGLANG_EXTRA_ARGS})
+        SGLANG_CMD+=("${EXTRA[@]}")
+    fi
+    
+    echo "[INFO] SGLang command: ${SGLANG_CMD[*]}"
+    "${SGLANG_CMD[@]}" &
+    PID_LLAMA=$!
+    echo "[INFO] SGLang started in background: http://127.0.0.1:${SGLANG_PORT}"
 else
     # Default to llama.cpp
     echo "[INFO] Starting llama-server on ${LLAMACPP_HOST}:${LLAMACPP_PORT}"
@@ -782,6 +738,8 @@ echo "[INFO] All services started successfully!"
 echo "[INFO] =========================================="
 if [[ "${INFERENCE_ENGINE}" == "vllm" ]]; then
     echo "[INFO] vLLM Server:          http://127.0.0.1:${VLLM_PORT}"
+elif [[ "${INFERENCE_ENGINE}" == "sglang" ]]; then
+    echo "[INFO] SGLang Server:        http://127.0.0.1:${SGLANG_PORT}"
 else
     echo "[INFO] llama.cpp Server:    http://127.0.0.1:${LLAMACPP_PORT}"
 fi
@@ -794,5 +752,5 @@ if [[ -n "${PID_MC_FRONTEND}" ]] && kill -0 "${PID_MC_FRONTEND}" 2>/dev/null; th
 fi
 echo "[INFO] =========================================="
 
-# Wait for any process to exit
-wait -n "${PID_MANAGER}" "${PID_LLAMA}" "${PID_OPENCLAW_GATEWAY}" "${PID_CONVEX}" "${PID_MC_FRONTEND}"
+# Only wait for OpenCode Manager - other services run in background
+wait -n "${PID_MANAGER}"

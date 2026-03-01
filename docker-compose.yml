@@ -37,6 +37,8 @@ services:
     ports:
       # vLLM (when INFERENCE_ENGINE=vllm)
       - "${PORT_VLLM:-8000}:8000"
+      # SGLang (when INFERENCE_ENGINE=sglang)
+      - "${PORT_SGLANG:-8001}:8001"
       # llama.cpp (when INFERENCE_ENGINE=llamacpp)
       - "${PORT_LLAMA:-8080}:8080"
       # OpenCode Manager
@@ -76,12 +78,12 @@ services:
       NO_PROXY: ${NO_PROXY_LIST:-bytepiping-storage.bytebroad.com,bytepiping-storage.bytebroad.com.cn,localhost,127.0.0.1,::1,.svc,.svc.cluster.local,169.254.169.254}
 
       # ========== 模型选择 ==========
-      # 支持：glm5 / glm47flash / minimax25 / kimi25 / step35
+      # 支持：glm5 / glm47flash / minimax25 / kimi25 / step35 / qwen35fp8
       MODEL_PRESET: ${MODEL_PRESET:-glm47flash}
       GPU_PROFILE: ${GPU_PROFILE:-35g}
 
       # ========== 推理引擎选择 ==========
-      # 支持: llama.cpp (默认), vllm
+      # 支持: llama.cpp (默认), vllm, sglang
       INFERENCE_ENGINE: ${INFERENCE_ENGINE:-llamacpp}
 
       # 模型路径（根据 MODEL_PRESET 选择对应的路径）
@@ -90,6 +92,7 @@ services:
       MODEL_PATH_MINIMAX25: ${MODEL_PATH_MINIMAX25:-}
       MODEL_PATH_KIMI25: ${MODEL_PATH_KIMI25:-}
       MODEL_PATH_STEP35: ${MODEL_PATH_STEP35:-}
+      MODEL_PATH_QWEN35FP8: ${MODEL_PATH_QWEN35FP8:-}
 
       # ========== 模型自动下载 ==========
       MODEL_AUTO_DOWNLOAD: ${MODEL_AUTO_DOWNLOAD:-true}
@@ -120,6 +123,15 @@ services:
       VLLM_MAX_NUM_SEQS: ${VLLM_MAX_NUM_SEQS:-256}
       VLLM_MAX_MODEL_LEN: ${VLLM_MAX_MODEL_LEN:-32768}
       VLLM_EXTRA_ARGS: ${VLLM_EXTRA_ARGS:-}
+
+      # ========== SGLang 参数 ==========
+      SGLANG_HOST: ${SGLANG_HOST:-0.0.0.0}
+      SGLANG_PORT: ${SGLANG_PORT:-8001}
+      SGLANG_MODEL_PATH: ${SGLANG_MODEL_PATH:-}
+      SGLANG_MODEL_HF_ID: ${SGLANG_MODEL_HF_ID:-}
+      SGLANG_TP_SIZE: ${SGLANG_TP_SIZE:-1}
+      SGLANG_MAX_MODEL_LEN: ${SGLANG_MAX_MODEL_LEN:-32768}
+      SGLANG_EXTRA_ARGS: ${SGLANG_EXTRA_ARGS:-}
 
       # ========== OpenCode Manager 参数 ==========
       OPENCODE_HOST: ${OPENCODE_HOST:-127.0.0.1}
